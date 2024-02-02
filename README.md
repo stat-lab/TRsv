@@ -8,7 +8,7 @@ Tandem repeat variations (TR-CNVs) are copy number variations of repeat units of
 ## Requirements
 
 perl 5 or later versions  
-R 3.5 or later (required library: [xgboost, Matrix, data.table, jsonlite, and lattice])(https://cran.r-project.org/web/packages/nnet)  
+R 3.5 or later (required library: [xgboost, Matrix, data.table, jsonlite, and lattice])(https://cran.r-project.org/web/packages/xgboost/)  
 [Samtools](https://github.com/samtools/samtools)  
 [YASS](https://bioinfo.univ-lille.fr/yass/)  
 [MultAlin](http://lipm-bioinfo.toulouse.inrae.fr/download/multalin/)  
