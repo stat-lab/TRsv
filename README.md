@@ -102,7 +102,7 @@ If this is not specified, the value specified with -ml is used for -msl.
 You can use this option if you want to resume from a step in the middle of the process.  
 -rp (r_path) path of R (>= v3.5), where xgboost library has been installed if the corresponding R is not set in $PATH (only non-HiFi data)
 
-##### Output files  
+#### Output files  
 
 ${output_prefix}.discov.vcf (final output vcf file for HiFi data)  
 ${output_prefix}.discov.filt.vcf (final output vcf file for non-HiFi data after machine learning-based filtering)  
@@ -131,7 +131,7 @@ TRsv joint_call -v <input_vcf_list> -p <output_prefix> -od <output_directory> -n
   The reference_fasta_index is an index file of the reference fasta used, which can be generated with the samtools faidx command.
   The gap_bed is a bed file describing tab-separated gap regions (chr start end) in each line.  
 
-[Output file]
+#### Output file
 
 ${output_prefix}.All-samples.vcf
 
@@ -154,7 +154,7 @@ TRsv annotate -v <input_vcf> -p <output_prefix>
 TRsv annotate -v <input_vcf> -p <output_prefix> -nh 1 -r <gff3_file>
 ```
 
-[Output files]  
+#### Output files  
  
 ${out_prefix}.annot.vcf  
 ${out_prefix}.AS.annot.vcf (Annotations for each sample are added to the FORMAT AN subfield.)  
