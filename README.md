@@ -19,10 +19,10 @@ R 3.5 or later (required library: [xgboost, Matrix, data.table, jsonlite, and la
 - Reference fasta file & its index file  
 - Reference TR bed file (Human TR bed files for hg37, hg38, and CNM13-T2T are included in this package)  
   
-- gap bed file (gap regions in the input reference genome. Human files for each build are included in this package. optional). 
-- transposable element (TE) fasta file (Human files containing ALU, LINE1, and SVA consensus sequences are included in this package. optional but highly recommended). 
-- excluded bed file (genome regions to be excluded. Human files for each build are included in this package. optional). 
-- Gender list file (optionally required for joint call, 1st column: sample name, 2nd column: M|F, separated by tab).
+- gap bed file (gap regions in the input reference genome. Human files for each build are included in this package. optional) 
+- transposable element (TE) fasta file (Human files containing ALU, LINE1, and SVA consensus sequences are included in this package. optional but highly recommended) 
+- excluded bed file (genome regions to be excluded. Human files for each build are included in this package. optional) 
+- Gender list file (optionally required for joint call, 1st column: sample name, 2nd column: M|F, separated by tab)
 - GFF annotation file (required for annotation command, available from [Ensembl](http://www.ensembl.org/). Human files for each build are included in this package.)  
   
 [Format of reference TR bed file]  
