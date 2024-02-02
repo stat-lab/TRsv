@@ -1,0 +1,131 @@
+#!/usr/bin/env perl
+
+use strict;
+use warnings;
+use Getopt::Long;
+use Pod::Usage;
+use threads;
+use FindBin qw($Bin);
+
+my $command = shift @ARGV;
+
+my $args = join (' ', @ARGV);
+
+@ARGV = ();
+
+print STDERR "command: $command Args: $args\n";
+
+my $help;
+
+my $script_dir = "$Bin/scripts";
+
+my $script = '';
+
+my $out_prefix = '';
+if ($args =~ /-prefix\s+(\S+)/){
+    $out_prefix = $1;
+}
+elsif ($args =~ /-p\s+(\S+)/){
+    $out_prefix = $1;
+}
+if ($command eq 'call'){
+    my $hifi_flag = 0;
+    if (($args eq '--help') or ($args eq '-help') or ($args eq '-h')){
+        die "Please specify -x hifi or -x ont (e.g., TRsv call -x ont -help)\n";
+    }
+    elsif ($args =~ /-co*n*f*\s+(\S+)/){
+        my $conf_file = $1;
+        if (!-f $conf_file){
+            die "Specified $conf_file does not exist:\n";
+        }
+        open (FILE, $conf_file);
+        while (my $line = <FILE>){
+            chomp $line;
+            next if ($line =~ /^#|^$/);
+            if ($line =~ /^platform\s+(\S+)/){
+                my $platform = $1;
+                if ($platform !~ /hifi|ont|clr/){
+                    die "specified --platform $platform does not match either hifi|ont|clr:\n";
+                }
+                if ($platform eq 'hifi'){
+                    $hifi_flag = 1;
+                }
+            }
+            elsif ($line =~ /^prefix\s+(\S+)/){
+                $out_prefix = $1;
+            }
+        }
+        close (FILE);
+    }
+    elsif ($args =~ /-platform\s+(\S+)/){
+        my $platform = $1;
+        if ($platform !~ /hifi|ont|clr/){
+            die "specified --platform $platform does not match either hifi|ont|clr:\n";
+        }
+        if ($platform eq 'hifi'){
+            $hifi_flag = 1;
+        }
+    }
+    elsif ($args =~ /-x\s+(\S+)/){
+        my $platform = $1;
+        if ($platform !~ /hifi|ont|clr/){
+            die "specified --platform $platform does not match either hifi|ont|clr:\n";
+        }
+        if ($platform eq 'hifi'){
+            $hifi_flag = 1;
+        }
+    }
+    else{
+        die "call command: --platform/-x option not specified in your argument or configure file:\n";
+    }
+    if ($hifi_flag == 1){
+        $script = "$script_dir/TRsv_hifi_v1.0.pl";
+    }
+    else{
+        $script = "$script_dir/TRsv_nonhifi_v1.0.pl";
+    }
+}
+elsif ($command eq 'joint_call'){
+    $script = "$script_dir/TRsv_joint_call.pl";
+}
+elsif ($command eq 'annotate'){
+    $script = "$script_dir/TRsv_annotate.pl";
+}
+elsif (($command eq '--help') or ($command eq '-help') or ($command eq '-h')){
+    pod2usage(-verbose => 0);
+}
+else{
+    die "The first argument of LRsv must be either call, joint_call, or annotate:\n";
+}
+
+if (($args !~ /-h/) and ($out_prefix eq '')){
+    die "--prefix is not specified:\n";
+}
+
+=head1 SYNOPSIS
+
+  LRsv [command] <options for each command>
+
+  commands:
+   call                   Detect TR-CNVs inside TR regions and SVs/indels outside TR regions through four steps.
+   joint_call             For vcf files from multiple samples, perform joint call with multiple vcfs to create a single vcf file.
+   annotate               Add the annotation of the genes that overlap TR-CNVs/SVs/indels to a vcf file. The annotation includes gene ID, gene name, and gene region overlapping the variants.
+   help                   Output help message
+   
+=cut
+
+if ($args =~ /-h$|-h\s|-help/){
+    $args = '-h';
+}
+
+my $command2 = "$script $args";
+
+my $command_log = "$out_prefix.command.log";
+
+open (OUT, ">> $command_log");
+print OUT "LRsv $command: $command2\n";
+close (OUT);
+
+system ($command2);
+
+
