@@ -45,9 +45,8 @@ Unpublished (submitted).
 
 ## Install
 
-```
-git clone https://github.com/stat-lab/TRsv
-```
+Download the latest release from https://github.com/stat-lab/TRsv/release, and unpack with gzip -dc TRsv_v1.*.tar.gz | tar xvf -  
+
 The Data folder in the TRsv package contains tandem repeat bed files, gap bed files, centromere bed files, and gff annotation files for the human build 37/38/T2T references. The Data folder also contains the training data sets for machine learning-based SV filtering for non-HiFi data. Do not change the name of the files/directories (except config files) and the directory structure within the TRsv package.  
 
 ## <a name="hdata"></a>Human and Non-human Data 
