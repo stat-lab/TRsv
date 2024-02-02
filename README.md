@@ -33,13 +33,13 @@ The following 8 columns are needed for each TR region.
 4th column (TRID): ID/name of TR  
 5th column (UnitSize): repeat unit size of TR  
 6th column (CN): repeat unit copy number of TR  
-7th column (ME): mobile element, such as ALU and LINE1, that has homology to TR repeat unit ('-' is indicated if no homology, optional)  
+7th column (ME): mobile element, such as ALU and LINE1, that has homology to TR repeat unit ('-' is indicated if no homology, it's OK even if all lines have '-'.)  
 8th column (UnitSeq): sequence of TR repeat unit  
 
 
 ## Citation
 
-Unpublished.  
+Unpublished (submitted).  
 
 
 ## Install
@@ -47,7 +47,7 @@ Unpublished.
 ```
 git clone https://github.com/stat-lab/TRsv
 ```
-The Data folder in the TRsv package contains tandem repeat bed files, gap bed files, centromere bed files, and gff annotation files for the human build 37/38/T2T references. The Data folder also contains the training data sets for machine learning-based SV filtering for non-HiFi data. Do not change the name of the files/directories (except config.txt) and the directory structure within the TRsv package.  
+The Data folder in the TRsv package contains tandem repeat bed files, gap bed files, centromere bed files, and gff annotation files for the human build 37/38/T2T references. The Data folder also contains the training data sets for machine learning-based SV filtering for non-HiFi data. Do not change the name of the files/directories (except config files) and the directory structure within the TRsv package.  
 
 ## <a name="hdata"></a>Human and Non-human Data 
 
@@ -64,16 +64,16 @@ TRsv annotate -h
 
 ### Call TR-CNVs and SVs/indels
 
-The variant calling is executed in four steps. In the first step (step-1), variants are collected from the input alignment file, and in the second step (step-2), the output file from step-1 is used to characterize the insertion sequences (e.g., determining the repeat unit content in TR-INS, checking the homology with TE sequences). The third step (step-3) is to annotate the low quality variants in the output file from step-2. The last step removes plausible false positive calls using a machine learning method and outputs the final vcf file. Intermediate files from step-1 to step-3 are output to a ${out_prefix}.temp folder, with ${$out_prefix}.chr*.discov.txt from step-1 and ${$out_prefix}.chr*.discov.out from steps-2/3.  
+The variant calling consists of four steps and is performed sequentially. In the first step (step-1), variants are collected from the input alignment file, and in the second step (step-2), the output file from step-1 is used to characterize the insertion sequences (e.g., determining the repeat unit content in TR-INS, checking the homology with TE sequences). The third step (step-3) is to annotate the low quality variants in the output file from step-2. The last step removes plausible false positive calls using a machine learning method and outputs the final vcf file. Intermediate files from step-1 to step-3 are output to a ${out_prefix}.temp folder, with ${$out_prefix}.chr*.discov.txt from step-1 and ${$out_prefix}.chr*.discov.out from steps-2/3.  
 
-[Using configure file]  
+[When using configure file]  
 ```
 TRsv call -c config.txt
 ```
 (Use template configure files for HiFi and non-HiFi contained in the package.)  
+  If you use human data and intend to use its related files contained in the Data folder, you do not need to specify 'repeat_bed', 'repeat_u', 'lowconf_tr', 'te_fasta', and 'gap_bed' in the config file.
 
-
-[Not using configure file (for human)]  
+[When not using configure file (for human)]  
 ```
 TRsv call -b <bam_file> -r <reference_fasta> -x <platform, hifi|ont|clr> --build <human_ref_build, 37|38|T2T, default: 37> -p <output_prefix> -n <number of threads>
 ```
@@ -83,7 +83,7 @@ TRsv call -b <bam_file> -r <reference_fasta> -x <platform, hifi|ont|clr> --build
   The human_ref_build is either 37 (GRCh37), 38 (GRCh38) or T2T (CHM13-T2T).  
   The jobs in steps 1-3 are executed in parallel for the N number of chromosome data specified by the -n option.
 
-[Not using configure file (for non-human)]  
+[When not using configure file (for non-human)]  
 ```
 TRsv call -b <bam_file> -r <reference_fasta> -x <platform, hifi|ont|clr> -p <output_prefix> -n <number_of_threads> -nh 1 -rep <repeat_bed (mandatory)> -gb <gap_bed (optional)> -tf <TE_fasta (optional)> 
 ```
@@ -96,7 +96,7 @@ Other frequently used options are as follows:
 
 -ml (min_len) <minimum length of variant> (default: 3 for HiFi reads, 20 for non-HiFi reads)  
 -msl (min_tr_len) <minimum length of TR-CNV> (default: 3 for HiFi reads, 20 for non-HiFi reads)  
-If not specify this, the value specified with -ml is used for -msl.  
+If this is not specified, the value specified with -ml is used for -msl.  
 -xc (exclude_chr) <chromosome name(s) to be excluded, comma-separated> (e.g., -xc Y for male sample)  
 -sk (skip) <skip step-1~3> (1: skip step-1, 2: skip step-2, 3: skip step-3, 12: skip steps-1 and -2, 123: skip steps-1, -2, and -3)  
 You can use this option if you want to resume from a step in the middle of the process.  
@@ -108,7 +108,7 @@ ${output_prefix}.discov.vcf (final output vcf file for HiFi data)
 ${output_prefix}.discov.filt.vcf (final output vcf file for non-HiFi data after machine learning-based filtering)  
 ${output_prefix}.discov.INS.fa (fasta file of insertion sequences of TR-INSs inside TR regions and INSs outside TR regions)  
   
-In the output vcf file, the TR-CNV line has the 'TR:CNV' string in the fifth field and 'SVLEN', 'CN', 'TRID', 'TREND', 'TRULEN', and other tags in the eighth field. The SVLEN and CN tags represent the expanded/contracted length and copy number of the corresponding TR unit, respectively. The TRID, TREND, TRULEN tags represent the TR ID, end position, and repeat unit size of the corresponding TR, respectively. A TR-INS with an unrelated INS sequence or low TR unit content (< 50% by default) is assigned as a normal INS with the TRID tag accompanied with a ME or TRUNIT tag in the eighth field. Conversely, when the sequence of a normal INS contains a high content of copies of some tandem repeat unit, the INS line has the TRUNIT tag indicating the TR unit sequence, but no TRID tag.
+In the output vcf file, the TR-CNV line has the 'TR:CNV' string in the fifth field and 'SVTYPE', 'SVLEN', 'CN', 'TRID', 'TREND', 'TRULEN', and other tags in the eighth field. The SVTYPE tag in the TR-CNV line indicates INS (expansion) or DEL (contraction) of the corresponding TR unit. The SVLEN and CN tags represent the INS/DEL length and copy number of the corresponding TR unit, respectively. If there are two non-reference TR-CNV alleles, these alleles are represented with comma-separated values or strings for each SVTYPE, SVLEN, and CN tag. The TRID, TREND, TRULEN tags represent the TR ID, end position, and repeat unit size of the corresponding TR, respectively. A TR-INS with an unrelated INS sequence or low TR unit content (< 50% by default) is assigned as a normal INS with the TRID tag accompanied with a ME or TRUNIT tag in the eighth field. Conversely, when the sequence of a normal INS contains a high content of copies of some tandem repeat unit, the INS line has the TRUNIT tag indicating the TR unit sequence, but no TRID tag.
 
 ### Merge vcf files from multiple samples (optional)
 
@@ -138,7 +138,7 @@ ${$output_prefix}.All-samples.vcf
 
 ### Annotate variants overlapping gene regions (optional)
 
-TRsv annotate command adds gene name/ID and gene region that overlap with the TR regions or SVs/indels to the INFO filed (with SVANN key) of the vcf file. The gene regions include exon/CDS (All-exons if the TR or SV completely overlaps all exons), 5’-/3’-UTR, intron, 5’-/3’-flanking region. Two ranges (5 Kb and 50 Kb) of the flanking regions are specified by default, and these lengths can be changed with the options, -c5, -c3, -f5, and -f3. These annotations are also added to the FORMAT AN subfield for each sample in an additional output vcf file. For human, one of the gff3 gene annotation files (Homo_sapiens.GRCh37.87.gff3.gz, Homo_sapiens.GRCh38.104.gff3.gz, or Homo_sapience.T2T-chm13v2.0.ensemble.gff3.gz), downloaded from Ensembl (ftp://ftp.ensembl.org/pub/grch37/release-87/gff3/homo_sapiens9), is automatically selected by default. For non-human species, a gff3 annotation file obtained from the Ensembl site must be specified with the -r option. Any input SV vcf file with SVTYPE and SVLEN keys in the INFO field can be used. The annotate command can be done as follows:  
+The annotate command adds gene name/ID and gene region that overlap with the TR regions or SVs/indels to the INFO filed (with SVANN key) of the vcf file. The gene regions include exon/CDS (All-exons if the TR or SV completely overlaps all exons), 5’-/3’-UTR, intron, 5’-/3’-flanking region. Two ranges (5 Kb and 50 Kb) of the flanking regions are specified by default, and these lengths can be changed with the options, -c5, -c3, -f5, and -f3. These annotations are also added to the FORMAT AN subfield for each sample in an additional output vcf file. For human, one of the gff3 gene annotation files (Homo_sapiens.GRCh37.87.gff3.gz, Homo_sapiens.GRCh38.104.gff3.gz, or Homo_sapience.T2T-chm13v2.0.ensemble.gff3.gz), downloaded from Ensembl (ftp://ftp.ensembl.org/pub/grch37/release-87/gff3/homo_sapiens9), is automatically selected by default. For non-human species, a gff3 annotation file obtained from the Ensembl site must be specified with the -r option. Any input SV vcf file with SVTYPE and SVLEN keys in the INFO field can be used. The annotate command can be done as follows:  
 <Human data>  
 
 ```
