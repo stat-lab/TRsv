@@ -1,0 +1,41 @@
+# 4 items below are mandatory.
+bam_file	./NA12878_HiFi_chr20.bam 	# file path of input bam (mandatory)
+ref_file	./GRCh38.chr20.fa.gz 		# file path of input reference fasta (mandatory)
+prefix		test			# prefix name of output files (mandatory)
+platform	hifi			# hifi, ont, or clr (PacBio CLR) (mandatory)
+
+# left blank if you have no specifed file or string.
+repeat_bed			# file path of input TR region bed, which is automatically supplied for human data (Data/simpleRepeat.b37.20-10000.addHip.ME.bed) (mandatory for non-human)
+repeat_u			# file path of TR region bed of unanalyzed TR regions, which are not present in 'repeat_bed', which is automatically supplied for human data (Data/simpleRepeat.b37.ov10K.bed)
+lowconf_tr			# file path of TR ID list whose TR regions could cause low-confident TR-CNV calling, which is automatically supplied for human data (Data/Low-confidence_STR-ov10Kb_region_b37.txt)
+exclude_bed			# file path of genome region bed to be excluded, which is automatically supplied for human data (Data/TE.fa)
+te_fasta			# file path of transposable element fasta, which is automatically supplied for human data
+gap_bed				# file path of gap bed file (gap regions in reference genome), which is automatically supplied for human data (Data/gap.bed)
+
+non_human	0
+build		38
+skip		0
+thread		1
+
+chr_analyzed	chr20
+exclude_chr	
+min_len		3
+min_tr_len	3
+min_vrr		0.05
+min_tr_vrr	0.15
+min_mapq	1
+incl_sec	0
+
+min_tr_lrate	0.5
+min_tr_cn	0.1
+min_tr_ident	70
+min_tr_read	2
+max_tr_rate	1.5
+
+min_ins_read	2
+min_del_read	2
+max_dpf		15
+max_sar		0.6
+max_mismatch	15
+max_indel	10
+targeted	0
