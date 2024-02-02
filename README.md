@@ -62,7 +62,7 @@ TRsv joint_call -h
 TRsv annotate -h
 ```
 
-### <a name="Call"></a>[Step-1]  Call TR-CNVs and SVs/indels
+### Call TR-CNVs and SVs/indels
 
 The variant calling is executed in four steps. In the first step (step-1), variants are collected from the input alignment file, and in the second step (step-2), the output file from step-1 is used to characterize the insertion sequences (e.g., determining the repeat unit content in TR-INS, checking the homology with TE sequences). The third step (step-3) is to annotate the low quality variants in the output file from step-2. The last step removes plausible false positive calls using a machine learning method and outputs the final vcf file. Intermediate files from step-1 to step-3 are output to a ${out_prefix}.temp folder, with ${$out_prefix}.chr*.discov.txt from step-1 and ${$out_prefix}.chr*.discov.out from steps-2/3.  
 
@@ -110,7 +110,7 @@ ${output_prefix}.discov.INS.fa (fasta file of insertion sequences of TR-INSs ins
   
 In the output vcf file, the TR-CNV line has the 'TR:CNV' string in the fifth field and 'SVLEN', 'CN', 'TRID', 'TREND', 'TRULEN', and other tags in the eighth field. The SVLEN and CN tags represent the expanded/contracted length and copy number of the corresponding TR unit, respectively. The TRID, TREND, TRULEN tags represent the TR ID, end position, and repeat unit size of the corresponding TR, respectively. A TR-INS with an unrelated INS sequence or low TR unit content (< 50% by default) is assigned as a normal INS with the TRID tag accompanied with a ME or TRUNIT tag in the eighth field. Conversely, when the sequence of a normal INS contains a high content of copies of some tandem repeat unit, the INS line has the TRUNIT tag indicating the TR unit sequence, but no TRID tag.
 
-### <a name="Joint call"></a>[Step-2]  Merge vcf files from multiple samples
+### Merge vcf files from multiple samples (optional)
 
 [Human data]
 
@@ -136,7 +136,7 @@ TRsv joint_call -v <input_vcf_list> -p <output_prefix> -od <output_directory> -n
 ${$output_prefix}.All-samples.vcf
 
 
-### <a name="Annotate></a>[Step-3] (optional)
+### Annotate variants overlapping gene regions (optional)
 
 TRsv annotate command adds gene name/ID and gene region that overlap with the TR regions or SVs/indels to the INFO filed (with SVANN key) of the vcf file. The gene regions include exon/CDS (All-exons if the TR or SV completely overlaps all exons), 5’-/3’-UTR, intron, 5’-/3’-flanking region. Two ranges (5 Kb and 50 Kb) of the flanking regions are specified by default, and these lengths can be changed with the options, -c5, -c3, -f5, and -f3. These annotations are also added to the FORMAT AN subfield for each sample in an additional output vcf file. For human, one of the gff3 gene annotation files (Homo_sapiens.GRCh37.87.gff3.gz, Homo_sapiens.GRCh38.104.gff3.gz, or Homo_sapience.T2T-chm13v2.0.ensemble.gff3.gz), downloaded from Ensembl (ftp://ftp.ensembl.org/pub/grch37/release-87/gff3/homo_sapiens9), is automatically selected by default. For non-human species, a gff3 annotation file obtained from the Ensembl site must be specified with the -r option. Any input SV vcf file with SVTYPE and SVLEN keys in the INFO field can be used. The annotate command can be done as follows:  
 <Human data>  
