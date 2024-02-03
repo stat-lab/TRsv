@@ -15,6 +15,8 @@ my $gap_bed = '';
 
 my $bam_file = '';
 
+my $samtool_path = '';
+
 my $cores = 1;
 
 my $out_prefix = '';
@@ -185,8 +187,15 @@ while (my $line = <FILE>){
     elsif ($arg eq 'max_tr_rate'){
         $str_max_len_rate = $value;
     }
+    elsif ($arg eq 'samtool_path'){
+        $samtool_path = $value;
+    }
 }
 close (FILE);
+
+if ($samtool_path ne ''){
+    $ENV{PATH} = "$samtool_path:" . $ENV{PATH};
+}
 
 my $str_min_len_rate = int (1 / $str_max_len_rate * 100 + 0.5) / 100;
 

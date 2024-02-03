@@ -15,6 +15,11 @@ my $gap_bed = '';
 
 my $bam_file = '';
 
+my $samtool_path = '';
+my $trf_path = '';
+my $yass_path = '';
+my $multalin_path = '';
+
 my $cores = 1;
 
 my $out_prefix = '';
@@ -179,8 +184,33 @@ while (my $line = <FILE>){
     elsif ($arg eq 'max_tr_rate'){
         $str_max_len_rate = $value;
     }
+    elsif ($arg eq 'samtool_path'){
+        $samtool_path = $value;
+    }
+    elsif ($arg eq 'trf_path'){
+        $trf_path = $value;
+    }
+    elsif ($arg eq 'yass_path'){
+        $yass_path = $value;
+    }
+    elsif ($arg eq 'multalin_path'){
+        $multalin_path = $value;
+    }
 }
 close (FILE);
+
+if ($samtool_path ne ''){
+    $ENV{PATH} = "$samtool_path:" . $ENV{PATH};
+}
+if ($trf_path ne ''){
+    $ENV{PATH} = "$trf_path:" . $ENV{PATH};
+}
+if ($yass_path ne ''){
+    $ENV{PATH} = "$yass_path:" . $ENV{PATH};
+}
+if ($multalin_path ne ''){
+    $ENV{PATH} = "$multalin_path:" . $ENV{PATH};
+}
 
 my $str_min_len_rate = int (1 / $str_max_len_rate * 100 + 0.5) / 100;
 

@@ -15,6 +15,8 @@ my $gap_bed = '';
 
 my $bam_file = '';
 
+my $samtool_path = '';
+
 my $cores = 1;
 
 my $out_prefix = '';
@@ -150,8 +152,15 @@ while (my $line = <FILE>){
     elsif ($arg eq 'targeted'){
         $targeted_seq = $value;
     }
+    elsif ($arg eq 'samtool_path'){
+        $samtool_path = $value;
+    }
 }
 close (FILE);
+
+if ($samtool_path ne ''){
+    $ENV{PATH} = "$samtool_path:" . $ENV{PATH};
+}
 
 my $temp_dir = "$out_prefix.temp";
 system ("mkdir $temp_dir") if (!-d $temp_dir);

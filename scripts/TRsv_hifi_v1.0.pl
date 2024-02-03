@@ -29,6 +29,11 @@ my $TE_fasta = '';
 
 my $gap_bed = '';
 
+my $samtool_path = '';
+my $yass_path = '';
+my $trf_path = '';
+my $multalin_path = '';
+
 print "# $0 @ARGV\n";
 
 my $bam_file = '';
@@ -155,6 +160,10 @@ GetOptions(
     'targeted|t' => \$targeted_seq,
     'non_human|nh' => \$non_human,
     'build=s' => \$build,
+    'samtool_path|sp=s' => \$samtool_path,
+    'trf_path|tp=s' => \$trf_path,
+    'yass_path|yp=s' => $yass_path,
+    'multalin_path|mp=s' => \$multalin_path,
     'help|h' => \$help,
     
 ) or pod2usage(-verbose => 0);
@@ -192,6 +201,11 @@ pod2usage(-verbose => 0) if $help;
    --non_human or -nh <BOOLEAN> sample is a non-human species [default: false]
    --build <STR>                reference build (37|38|T2T) when using human sample [default: 37]
    --thread or -n <INT>         number of threads [default: 1]
+
+   --samtool_path or -sp <STR>  path of samtools if the corresponding path is not set in $PATH
+   --trf_path or -tp <STR>      path of trf if the corresponding path is not set in $PATH
+   --yass_path or -yp <STR>     path of yass if the corresponding path is not set in $PATH
+   --multalin_path or -mp <STR> path of multalin if the corresponding path is not set in $PATH
 
    --min_ins_read or -mir <INT> minimum number of reads supporting INSs/DUPs/INVs [default: 2]
    --min_del_read or -mdr <INT> minimum number of reads supporting DELs [default: 2]
@@ -314,6 +328,18 @@ if ($conf_file ne ''){
         elsif ($arg eq 'targeted'){
             $targeted_seq = $value;
         }
+        elsif ($arg eq 'samtool_path'){
+            $samtool_path = $value;
+        }
+        elsif ($arg eq 'trf_path'){
+            $trf_path = $value;
+        }
+        elsif ($arg eq 'yass_path'){
+            $yass_path = $value;
+        }
+        elsif ($arg eq 'multalin_path'){
+            $multalin_path = $value;
+        }
     }
     close (FILE);
 }
@@ -324,6 +350,38 @@ die "-prefix option not specified:\n" if ($out_prefix eq '');
 
 my $temp_dir = "$out_prefix.temp";
 system ("mkdir $temp_dir") if (!-d $temp_dir);
+
+if (($samtool_path eq '') or (!-f "$samtool_path/samtools")){
+    my $Spath = `which samtools`;
+    chomp $Spath;
+    if (($Spath =~ /\s/) or (!-f $Spath)){
+        die "samtools path is not specified with --samtool_path or not in PATH:\n";
+    }
+}
+elsif ($samtool_path ne ''){
+    $ENV{PATH} = "$samtool_path:" . $ENV{PATH};
+}
+if (($trf_path eq '') or (!-f "$trf_path/trf")){
+    my $Tpath = `which trf`;
+    chomp $Tpath;
+    if (($Tpath =~ /\s/) or (!-f $Tpath)){
+        die "trf path is not specified with --trf_path or not in PATH:\n";
+    }
+}
+if (($yass_path eq '') or (!-f "$yass_path/yass")){
+    my $Ypath = `which yass`;
+    chomp $Ypath;
+    if (($Ypath =~ /\s/) or (!-f $Ypath)){
+        die "yass path is not specified with --yass_path or not in PATH:\n";
+    }
+}
+if (($multalin_path eq '') or (!-f "$multalin_path/multalin")){
+    my $Mpath = `which multalin`;
+    chomp $Mpath;
+    if (($Mpath =~ /\s/) or (!-f $Mpath)){
+        die "multalin path is not specified with --multalin_path or not in PATH:\n";
+    }
+}
 
 if ($non_human == 0){
     $TE_fasta = "$data_dir/TE.fa";
@@ -403,6 +461,10 @@ print OUT "incl_sec\t$include_secalign\n";
 print OUT "targeted\t$targeted_seq\n";
 print OUT "exclude\t$exclude_bed\n";
 print OUT "non_human\t$non_human\n";
+print OUT "samtool_path\t$samtool_path\n" if ($samtool_path ne '');
+print OUT "trf_path\t$trf_path\n" if ($trf_path ne '');
+print OUT "yass_path\t$yass_path\n" if ($yass_path ne '');
+print OUT "multalin_path\t$multalin_path\n" if ($multalin_path ne '');
 
 close (OUT);
 
