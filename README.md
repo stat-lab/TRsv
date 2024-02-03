@@ -49,6 +49,10 @@ Download the latest release from https://github.com/stat-lab/TRsv/releases, and 
 
 The Data folder in the TRsv package contains tandem repeat bed files, gap bed files, centromere bed files, and gff annotation files for the human build 37/38/T2T references. The Data folder also contains the training data sets for machine learning-based SV filtering for non-HiFi data. Do not change the name of the files/directories (except config files) and the directory structure within the TRsv package.  
 
+Install the required external tools (samtools, yass, multalin, trf, and Rscript) and set the paths of their executables to the $PATH environmental variables (e.g. export PATH=/home/tools/yass-1.15/bin:$PATH). If the executable names are different from 'trf', 'yass', or 'multalin', please rename the executable names to 'trf', 'yass', or 'multalin' (e.g., trf409.linux64 -> trf).
+ 
+Alternatively, specify the options (samtool_path, yass_path, multalin_path, trf_path, and r_path) on TRsv command or in configure file (e.g., --yass_path /home/tools/yass-1.15/bin).  
+
 ## <a name="hdata"></a>Human and Non-human Data 
 
 By default, TRsv handles WGS alignment data (bam/cram) generated based on the human build 37 reference (GRCh37 or GRCh37d5). To use the data based on the human build 38 reference or T2T-CHM13.v2.0, run the TRsv command with the ‘--build 38’ or '--build T2T' option. When the --build option is specified, specific data files related to the human reference will be automatically selected from the Data folder. If you need to use files other than those in the Data folder, please specify the relevant options, such as --repeat_bed and --exclude_bed. For non-human species, use the option ‘-nh 1’ and use related options such as --repeat_bed, --gap_bed, and --te_fa to specify external input files such as repeat bed, gap bed, TE fasta file, etc.  
