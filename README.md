@@ -49,9 +49,7 @@ Download the latest release from https://github.com/stat-lab/TRsv/releases, and 
 
 The Data folder in the TRsv package contains tandem repeat bed files, gap bed files, centromere bed files, and gff annotation files for the human build 37/38/T2T references. The Data folder also contains the training data sets for machine learning-based SV filtering for non-HiFi data. Do not change the name of the files/directories (except config files) and the directory structure within the TRsv package.  
 
-Install the required external tools (samtools, yass, multalin, trf, and Rscript) and set the paths of their executables to the $PATH environmental variables (e.g. export PATH=/home/tools/yass-1.15/bin:$PATH). If the executable names are different from 'trf', 'yass', or 'multalin', please rename the executable names to 'trf', 'yass', or 'multalin' (e.g., trf409.linux64 -> trf).
- 
-Alternatively, specify the options (samtool_path, yass_path, multalin_path, trf_path, and r_path) on TRsv command or in configure file (e.g., --yass_path /home/tools/yass-1.15/bin).  
+Install the required external tools (samtools, yass, multalin, trf, and Rscript). If the executable names are different from 'trf', 'yass', or 'multalin', please rename the executable names to 'trf', 'yass', or 'multalin' (e.g., trf409.linux64 -> trf). Set the path (the directory path containing the executable) to the $PATH environmental variable (e.g. export PATH=/home/tools/yass-1.15/bin:$PATH). Alternatively, specify the options (samtool_path, yass_path, multalin_path, trf_path, and r_path) on TRsv command or in configure file (e.g., --yass_path /home/tools/yass-1.15/bin).  
 
 ## <a name="hdata"></a>Human and Non-human Data 
 
