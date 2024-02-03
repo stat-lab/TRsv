@@ -39,3 +39,8 @@ max_sar		0.6
 max_mismatch	15
 max_indel	10
 targeted	0
+
+samtool_path				# path of samtools (directory path containing samtools executable), if the path is not set in $PATH
+trf_path				# path of trf (directory path containing trf executable), if the path is not set in $PATH
+yass_path				# path of yass (directory path containing yass executable), if the path is not set in $PATH
+multalin_path				# path of multalin (directory path containing multalin executable), if the path is not set in $PATH

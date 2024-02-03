@@ -41,4 +41,9 @@ max_indel	20
 targeted	0
 min_align	0.1
 dis_filter	0
-r_path		/opt/local/r/3.6.1/bin			# path of R (>= v3.5), where xgboost library has been installed if the corresponding R is not set in $PATH
+
+r_path		/opt/local/r/3.6.1/bin	# path of R (>= v3.5), where xgboost library has been installed if the corresponding R is not set in $PATH
+samtool_path				# path of samtools (directory path containing samtools executable), if the path is not set in $PATH
+trf_path				# path of trf (directory path containing trf executable), if the path is not set in $PATH
+yass_path				# path of yass (directory path containing yass executable), if the path is not set in $PATH
+multalin_path				# path of multalin (directory path containing multalin executable), if the path is not set in $PATH
