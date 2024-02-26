@@ -1792,11 +1792,25 @@ foreach my $chr (keys %ins_sv){
         next if (!exists ${${$sv2{$chr}}{$ipos}}{'INS'});
         my $ilen = ${$ins_sv{$chr}}{$ipos};
         my $distance = $ipos - $pre_ipos;
+        my $line = ${${$sv2{$chr}}{$ipos}}{'INS'};
+        my $read = $1 if ($line =~ /READS=(\d+)/);
+        my $BP = 0;
+        $BP = $1 if ($line =~ /BP=(\d+)/);
+        if ($BP == 2){
+            if ($read <= 3){
+                delete ${${$sv2{$chr}}{$ipos}}{'INS'};
+                next;
+            }
+        }
+        elsif ($BP == 3){
+            if ($read <= 4){
+                delete ${${$sv2{$chr}}{$ipos}}{'INS'};
+                next;
+            }
+        }
         if (($distance <= $bp_diff3) and ($distance < $pre_ilen) and ($distance < $ilen) and ($pre_ilen > 0) and ($ilen > 0) and ($pre_ilen / $ilen <= 1.5) and ($pre_ilen / $ilen >= 0.66) and (exists ${${$sv2{$chr}}{$pre_ipos}}{'INS'})){
             my $pre_line = ${${$sv2{$chr}}{$pre_ipos}}{'INS'};
-            my $line = ${${$sv2{$chr}}{$ipos}}{'INS'};
             my $pre_read = $1 if ($pre_line =~ /READS=(\d+)/);
-            my $read = $1 if ($line =~ /READS=(\d+)/);
             my $pre_vrr = $1 if ($pre_line =~ /VRR=([\d\.]+)/);
             my $vrr = $1 if ($line =~ /VRR=([\d\.]+)/);
             my $new_read = $pre_read + $read;
