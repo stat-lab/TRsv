@@ -202,10 +202,10 @@ pod2usage(-verbose => 0) if $help;
    --build <STR>                reference build (37|38|T2T) when using human sample [default: 37]
    --thread or -n <INT>         number of threads [default: 1]
 
-   --samtool_path or -sp <STR>  path of samtools if the corresponding path is not set in $PATH
-   --trf_path or -tp <STR>      path of trf if the corresponding path is not set in $PATH
-   --yass_path or -yp <STR>     path of yass if the corresponding path is not set in $PATH
-   --multalin_path or -mp <STR> path of multalin if the corresponding path is not set in $PATH
+   --samtool_path or -sp <STR>  path of samtools (${samtool_path}/samtools) if the corresponding path is not set in $PATH
+   --trf_path or -tp <STR>      path of trf (${trf_path}/trf) if the corresponding path is not set in $PATH
+   --yass_path or -yp <STR>     path of yass (${yass_path}/yass) if the corresponding path is not set in $PATH
+   --multalin_path or -mp <STR> path of multalin (${multalin_path}/multalin) if the corresponding path is not set in $PATH
 
    --min_ins_read or -mir <INT> minimum number of reads supporting INSs/DUPs/INVs [default: 2]
    --min_del_read or -mdr <INT> minimum number of reads supporting DELs [default: 2]
@@ -351,36 +351,57 @@ die "-prefix option not specified:\n" if ($out_prefix eq '');
 my $temp_dir = "$out_prefix.temp";
 system ("mkdir $temp_dir") if (!-d $temp_dir);
 
-if (($samtool_path eq '') or (!-f "$samtool_path/samtools")){
+if ($samtool_path eq ''){
     my $Spath = `which samtools`;
     chomp $Spath;
     if (($Spath =~ /\s/) or (!-f $Spath)){
         die "samtools path is not specified with --samtool_path or not in PATH:\n";
     }
 }
-elsif ($samtool_path ne ''){
+else{
+    if (!-f "$samtool_path/samtools"){
+        die "samtools does not exist in the specified path: $samtool_path:\n";
+    }
     $ENV{PATH} = "$samtool_path:" . $ENV{PATH};
 }
-if (($trf_path eq '') or (!-f "$trf_path/trf")){
+if ($trf_path eq ''){
     my $Tpath = `which trf`;
     chomp $Tpath;
     if (($Tpath =~ /\s/) or (!-f $Tpath)){
         die "trf path is not specified with --trf_path or not in PATH:\n";
     }
 }
-if (($yass_path eq '') or (!-f "$yass_path/yass")){
+else{
+    if (!-f "$samtool_path/samtools"){
+        die "trf does not exist in the specified path: $trf_path:\n";
+    }
+    $ENV{PATH} = "$trf_path:" . $ENV{PATH};
+}
+if ($yass_path eq ''){
     my $Ypath = `which yass`;
     chomp $Ypath;
     if (($Ypath =~ /\s/) or (!-f $Ypath)){
         die "yass path is not specified with --yass_path or not in PATH:\n";
     }
 }
-if (($multalin_path eq '') or (!-f "$multalin_path/multalin")){
+else{
+    if (!-f "$yass_path/yass"){
+        die "yass does not exist in the specified path: $yass_path:\n";
+    }
+    $ENV{PATH} = "$yass_path:" . $ENV{PATH};
+}
+if ($multalin_path eq ''){
     my $Mpath = `which multalin`;
     chomp $Mpath;
     if (($Mpath =~ /\s/) or (!-f $Mpath)){
         die "multalin path is not specified with --multalin_path or not in PATH:\n";
     }
+}
+else{
+    if (!-f "$multalin_path/yass"){
+        die "multalin does not exist in the specified path: $multalin_path:\n";
+    }
+    $ENV{PATH} = "$multalin_path:" . $ENV{PATH};
 }
 
 if ($non_human == 0){
