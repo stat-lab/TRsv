@@ -33,6 +33,7 @@ my $samtool_path = '';
 my $yass_path = '';
 my $trf_path = '';
 my $multalin_path = '';
+my $minimap_path = '';
 
 print "# $0 @ARGV\n";
 
@@ -164,6 +165,7 @@ GetOptions(
     'trf_path|tp=s' => \$trf_path,
     'yass_path|yp=s' => $yass_path,
     'multalin_path|mp=s' => \$multalin_path,
+    'minimap_path|mmp=s' => \$minimap_path,
     'help|h' => \$help,
     
 ) or pod2usage(-verbose => 0);
@@ -206,6 +208,7 @@ pod2usage(-verbose => 0) if $help;
    --trf_path or -tp <STR>      path of trf (${trf_path}/trf) if the corresponding path is not set in $PATH
    --yass_path or -yp <STR>     path of yass (${yass_path}/yass) if the corresponding path is not set in $PATH
    --multalin_path or -mp <STR> path of multalin (${multalin_path}/multalin) if the corresponding path is not set in $PATH
+   --minimap_path or -mmp <STR> path of minimap2 (${minimap2_path}/minimap2) if the corresponding path is not set in $PATH
 
    --min_ins_read or -mir <INT> minimum number of reads supporting INSs/DUPs/INVs [default: 2]
    --min_del_read or -mdr <INT> minimum number of reads supporting DELs [default: 2]
@@ -372,7 +375,7 @@ if ($trf_path eq ''){
     }
 }
 else{
-    if (!-f "$samtool_path/samtools"){
+    if (!-f "$trf_path/trf"){
         die "trf does not exist in the specified path: $trf_path:\n";
     }
     $ENV{PATH} = "$trf_path:" . $ENV{PATH};
@@ -398,10 +401,23 @@ if ($multalin_path eq ''){
     }
 }
 else{
-    if (!-f "$multalin_path/yass"){
+    if (!-f "$multalin_path/multalin"){
         die "multalin does not exist in the specified path: $multalin_path:\n";
     }
     $ENV{PATH} = "$multalin_path:" . $ENV{PATH};
+}
+if ($minimap_path eq ''){
+    my $MMpath = `which minimap2`;
+    chomp $MMpath;
+    if (($MMpath =~ /\s/) or (!-f $MMpath)){
+        die "minimap2 path is not specified with --minimap_path or not in PATH:\n";
+    }
+}
+else{
+    if (!-f "$minimap_path/minimap2"){
+        die "minimap2 does not exist in the specified path: $multalin_path:\n";
+    }
+    $ENV{PATH} = "$minimap_path:" . $ENV{PATH};
 }
 
 if ($non_human == 0){
