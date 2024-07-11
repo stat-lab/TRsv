@@ -6,12 +6,13 @@ use Pod::Usage;
 use threads;
 use FindBin qw($Bin);
 
-# detect SVs from error-corrected long read alignment bam file
+# detect SVs from error-uncorrected long read alignment bam file
+# generate a consensus sequence from INS sequences
 # define repeats in INS sequence with rtf
 # when an INS flank sequence is an TR and the INS is repeat sequence, confirm whether the TR and the INS repeat motif are identical
 # for non-repeat INS, the INS sequence is aligned to the flanking regions (up tp 100 Kb) with yass to define the INS to be DUP
 # call INSs with single BPs (removing candidates whose 5'- and 3'-clipped sequences are aligned to the flanking ref sequences upstream and downstream of the BP)
-# call DELs in a repeat-aware manner
+# call INSs and DELs in a repeat-aware manner
 
 my $data_dir = "$Bin/../Data";
 
@@ -29,6 +30,7 @@ my $TE_fasta = '';
 
 my $gap_bed = '';
 
+my $R_path = '';
 my $samtool_path = '';
 my $yass_path = '';
 my $trf_path = '';
@@ -36,11 +38,20 @@ my $multalin_path = '';
 
 print "# $0 @ARGV\n";
 
+my $command = $0;
+my @Arg = (@ARGV);
+
 my $bam_file = '';
 
 my $cores = 1;
 
 my $out_prefix = '';
+
+my $pacbio_cov = 0;
+my $sum_pacbio_len = 0;
+
+my $min_pacbio_cov_rate = 0.3;
+my $min_pacbio_cov_rate_2 = 0.6;
 
 my $chr_analyzed = 'ALL';
 my $exclude_chr = '';
@@ -50,43 +61,50 @@ my $min_mapQ_idup = 20;
 
 my $max_SAR = 0.7;
 
-my $min_ins_reads = 2;
-my $min_del_reads = 2;
-my $min_str_reads = 3;
+my $min_maplen = 500;
+
+my $min_align_rate = 0.1;
+
+my $min_ins_reads = 3;
+my $min_del_reads = 3;
+my $min_str_reads = 4;
+
+my $include_secalign = 0;
 
 my $min_VRR = 0.05;
 my $min_str_vrr = 0.15;
-my $min_str_vrr2 = 0.3;
 
 my $str_max_len_rate = 1.5;
 
 my $max_depth_fold = 15;
 
-my $min_maplen = 500;
-
-my $chromium = 0;
-
-my $include_secalign = 0;
-
-my $max_mismatch = 15;
-
-my $min_indel_size = 50;
+my $min_indel_size = 20;
+my $min_indel_size2 = 100;
 my $min_str_indel_size = 0;
 my $min_ins_str_mei = 200;
 my $min_str_len_rate = 0.5;
 my $min_str_cn = 0.1;
-my $min_str_identity = 70;
+my $min_str_identity = 65;
 
-my $indel_rate = 10;
+my $min_del_size = 20;
+my $min_ins_size = 20;
 
-my $min_coverage = 80;
+my $max_mismatch = 20;
+
+my $indel_rate = 20;
+
+my $min_coverage = 75;
 my $min_me_coverage = 60;
 
 my $dup_find = 1;
 
 my $intersperse_dup_find = 1;
 
+my $min_intersperse_dup = 200;
+
 my $mei_find = 1;
+
+my $seq_type = 'pb';
 
 my $bp_diff = 100;
 my $bp_diff2 = 200;
@@ -98,6 +116,7 @@ my $max_dist = 10;
 my $max_dist2 = 15;
 my $max_match_size = 200;
 my $min_clip_len = 50;
+my $min_clip_len2 = 200;
 my $max_insbp_diff = 200;
 my $min_inv_size = 100;
 my $max_del_size = 50000000;
@@ -107,11 +126,10 @@ my $min_dup_len = 50;
 my $max_bp_sd_small_ins = 5;
 
 my $Mbin_size = 1000000;
-my $Mbin_size2 = 100000;
 
-my $platform = 'hifi';
+my $platform = 'ont';
 
-my $skip_stage1 = 0;
+my $disable_ML_filter = 0;
 
 my $targeted_seq = 0;
 
@@ -152,29 +170,32 @@ GetOptions(
     'max_dpf|xd=f' => \$max_depth_fold,
     'min_mapq|mq=i' => \$min_mapQ,
     'max_sar|sar=f' => \$max_SAR,
+    'min_align|ma=f' => \$min_align_rate,
     'max_mismatch|xm=i' => \$max_mismatch,
     'max_indel|xi=i' => \$indel_rate,
-    'incl_sec|insec' => \$include_secalign,
     'platform|x=s' => \$platform,
+    'incl_sec|insec' => \$include_secalign,
+    'dis_filter|df' => \$disable_ML_filter,
     'skip|sk=i' => \$skip_step,
     'targeted|t' => \$targeted_seq,
     'non_human|nh' => \$non_human,
     'build=s' => \$build,
+    'r_path|rp=s' => \$R_path,
     'samtool_path|sp=s' => \$samtool_path,
     'trf_path|tp=s' => \$trf_path,
     'yass_path|yp=s' => $yass_path,
     'multalin_path|mp=s' => \$multalin_path,
-    'help|h' => \$help,
-    
+    'help|h' => \$help
 ) or pod2usage(-verbose => 0);
 pod2usage(-verbose => 0) if $help;
 
+
 =head1 SYNOPSIS
 
-  TRsv_hifi_v1.1.pl <option>
+  TRsv_nonhifi_v1.1.pl <option>
 
   Options:
-   --bam_file or -b <STR>       bam file for long reads [mandatory]
+   --bam_file or -b <STR>       bam file for long reads (or $file_prefix of bam files divided for individual chromosome; assuming $file_path.chr1.bam, .. $file_path.chrX.bam) [mandatory]
    --ref_file or -r <STR>       reference fasta file [mandatory]
    --repeat_bed or -rep <STR>   simple/short repeat (STR/VNTR) bed file (TRsv-compatible format), which is automatically selected for human. [mandatory for non-human]
    --prefix or -p <STR>         output prefix [mandatory]
@@ -187,12 +208,12 @@ pod2usage(-verbose => 0) if $help;
                                 [default for human: centromere regions, which is automatically selected for human. Specify any non-file character if you want to include centromeres.]
    --gap_bed or -gb <STR>       gap bed file for reference gap regions, which is automatically selected for human. [optional]
    --te_fasta or -tf <STR>      retroelement sequence fasta file, which is automatically selected for human. [optional]
-   
+
    --chr or -tc <STR>           target chromosome(s) (comma-separated chromosome name(s)) [default: ALL]
    --excl_chr or -xc <STR>      chromosome(s) to be excluded for analysis (comma-separated)
-   --platform or -x <STR>       sequencing platform (hifi|ont|clr)
-   --min_len or -ml <INT>       minimum size of INS/DEL [default: 50]
-   --min_tr_len or -msl  <INT>  minimum size of TR-CNV [default: 50 (N specified with -ml)]
+   --platform or -x <STR>       sequencing platform (ont|clr)
+   --min_len or -ml <INT>       minimum size of INS/DEL [default: 20] (restricted to >= 15 for ont and clr)
+   --min_tr_len or -msl  <INT>  minimum size of TR-CNV [default: 20 (N specified with -ml)] (restricted to >= 15 for ont and clr)
    --min_vrr or -mv <FLOAT>     minimum VRR (variant rate to read depth) [default: 0.05]
    --min_tr_vrr or -msv <FLOAT> minimum VRR (variant rate to read depth) for TR-CNVs [default: 0.15]
    --min_mapq or -mq <INT>      minimum mapping quality [default: 1]
@@ -202,23 +223,26 @@ pod2usage(-verbose => 0) if $help;
    --build <STR>                reference build (37|38|T2T) when using human sample [default: 37]
    --thread or -n <INT>         number of threads [default: 1]
 
+   --r_path or -rp <STR>        path of R (>= v3.5), where xgboost library has been installed if the corresponding R is not set in $PATH
    --samtool_path or -sp <STR>  path of samtools (${samtool_path}/samtools) if the corresponding path is not set in $PATH
    --trf_path or -tp <STR>      path of trf (${trf_path}/trf) if the corresponding path is not set in $PATH
    --yass_path or -yp <STR>     path of yass (${yass_path}/yass) if the corresponding path is not set in $PATH
    --multalin_path or -mp <STR> path of multalin (${multalin_path}/multalin) if the corresponding path is not set in $PATH
-
-   --min_ins_read or -mir <INT> minimum number of reads supporting INSs/DUPs/INVs [default: 2]
-   --min_del_read or -mdr <INT> minimum number of reads supporting DELs [default: 2]
-   --min_tr_read or -msr <INT>  minimum number of reads supporting TR-CNVs [default: 3]
+   
+   --min_ins_read or -mir <INT> minimum number of reads supporting INSs/DUPs/INVs [default: 3]
+   --min_del_read or -mdr <INT> minimum number of reads supporting DELs [default: 3]
+   --min_tr_read or -msr <INT>  minimum number of reads supporting TR-CNVs [default: 5]
    --max_tr_rate or -xsr <FLOAT> maximum rate of length for descriminating different TR-CNV alleles at a site [deafult: 1.5, when the ratio of two different TR-CNV length is larger than 1.5 or smaller than 1/1.5, these are considered two alleles]
    --min_tr_lrate or -mslr <FLOAT> minimum rate of TR unit content in TR-INS sequence [default: 0.5] (TR-INS that a content of TR unit/motif is smaller than the specified rate is regarded as a normal INS)
                                 If 0 is specified, all INSs within a TR region are regarded as TR-INS without checking the homology between the INS sequence and TR motif
    --min_tr_cn or -msc <FLOAT>  minimum copy number of TR-CNV [default: 0.1] (TR-CNV with a smaller copy number than the specified value and smaller than the value specified with --min_len is discarded)
-   --min_tr_ident or -msi <INT> minimum identity (%) of TR-INS sequence with TR motif [default: 70]
+   --min_tr_ident or -msi <INT> minimum identity (%) of TR-INS sequence with TR motif [default: 65]
    --max_dpf or -xd <FLOAT>     maximum fold of mean read depth to consider SV calling (not call in high-depth regions with specified value x mean depth) [default: 15]
    --max_sar or -sar <FLOAT>    maximum rate of SVs supported by alignments with maping quality 0, including secondary alignmnents (SVs exceeding this value are marked as 'LowQual' in the FILTER field) [default: 0.7]
-   --max_mismatch or -xm <INT>  maximum percentage of mismatch for yass aligner to search INS homology to TE or flanking regions [default: 15]
-   --max_indel or -xi <INT>     maximum percentage of indel for yass aligner to search INS homology to TE or flanking regions [default: 10]
+   --max_mismatch or -xm <INT>  maximum percentage of mismatch for yass aligner to search INS homology to TE or flanking regions [default: 20]
+   --max_indel or -xi <INT>     maximum percentage of indel for yass aligner to search INS homology to TE or flanking regions [default: 20]
+   --min_align or -ma <FLOAT>   minimum alignment rate (In 5'- and 3'-clipped aligned reads, when the rate of aligned length in the read length is smaller than the specified value, the read is removed) [default: 0.1]
+   --dis_filter or -df <BOOLEAN>  disable machine learning-based filtering at the final step [default: flase]
    --targeted or -t <BOOLEAN>   the data is targeted sequencing data [default: false]
    --help or -h                 output help message
    
@@ -328,6 +352,15 @@ if ($conf_file ne ''){
         elsif ($arg eq 'targeted'){
             $targeted_seq = $value;
         }
+        elsif ($arg eq 'min_align'){
+            $min_align_rate = $value;
+        }
+        elsif ($arg eq 'dis_filter'){
+            $disable_ML_filter = $value;
+        }
+        elsif ($arg eq 'r_path'){
+            $R_path = $value;
+        }
         elsif ($arg eq 'samtool_path'){
             $samtool_path = $value;
         }
@@ -347,6 +380,7 @@ if ($conf_file ne ''){
 die "-bam_file option not specified:\n" if ($bam_file eq '');
 die "-ref option not specified:\n" if ($ref_file eq '');
 die "-prefix option not specified:\n" if ($out_prefix eq '');
+die "min read must be > 1:\n" if ($min_ins_reads <= 1) or ($min_del_reads <= 1);
 
 my $temp_dir = "$out_prefix.temp";
 system ("mkdir $temp_dir") if (!-d $temp_dir);
@@ -403,6 +437,33 @@ else{
     }
     $ENV{PATH} = "$multalin_path:" . $ENV{PATH};
 }
+if ($R_path eq ''){
+    my $Rpath = `which Rscript`;
+    chomp $Rpath;
+    if (($Rpath =~ /\s/) or (!-f $Rpath)){
+        die "R path is not specified with --R_path or not in PATH:\n";
+    }
+}
+else{
+    if (!-f "$R_path/Rscript"){
+        die "Rscript does not exist in the specified path: $R_path:\n";
+    }
+    $ENV{PATH} = "$R_path:" . $ENV{PATH};
+}
+my $R_test_script = "$Bin/XGB_test.R";
+my @Rtest = `Rscript $R_test_script`;
+if (@Rtest > 0){
+    my $flag = 0;
+    foreach (@Rtest){
+        chomp $_;
+        if ($_ =~ /library\(|error/){
+            $flag = 1;
+        }
+    }
+    if ($flag == 1){
+        die "xgboost or Matrix library in R seems to be absent:\n";
+    }
+}
 
 if ($non_human == 0){
     $TE_fasta = "$data_dir/TE.fa";
@@ -433,9 +494,33 @@ else{
 if ($min_str_indel_size == 0){
     $min_str_indel_size = $min_indel_size;
 }
+elsif ($min_str_indel_size < 15){
+    die "Aborted due to parameter setting restrictions of --min_len $min_indel_size (should be >= 15):\n";
+}
 
-my $min_VRR2 = $min_VRR * 2;
-$min_VRR2 = 0.01 if ($min_VRR2 > 0.01);
+my $commnad_log = "$temp_dir/command.log";
+open (OUT, "> $commnad_log");
+print OUT "$command @Arg\n";
+close (OUT);
+
+my %target_chr;
+my @tchr = split (/,/, $chr_analyzed) if ($chr_analyzed ne 'ALL');
+map{$target_chr{$_} = 1} @tchr;
+
+my %excl_chr;
+my @xchr = split (/,/, $exclude_chr) if ($exclude_chr ne '');
+map{$excl_chr{$_} = 1} @xchr;
+
+my $R_script_DEL = "$Bin/XGB_TRsv2_ont_DEL.R";
+my $R_script_INS = "$Bin/XGB_TRsv2_ont_INS.R";
+if ($platform ne 'ont'){
+    $R_script_DEL = "$Bin/XGB_TRsv2_clr_DEL.R";
+    $R_script_INS = "$Bin/XGB_TRsv2_clr_INS.R";
+}
+
+if ($min_indel_size < 20){
+    die "Aborted due to parameter setting restrictions of --min_len $min_indel_size (should be >= 20):\n";
+}
 
 my $ref_base = $ref_file;
 $ref_base = $1 if ($ref_file =~ /\/(.+?)$/);
@@ -472,13 +557,15 @@ print OUT "min_del_read\t$min_del_reads\n";
 print OUT "min_tr_read\t$min_str_reads\n";
 print OUT "max_tr_rate\t$str_max_len_rate\n";
 print OUT "min_vrr\t$min_VRR\n";
-print OUT "min_tr_vrr\t$min_str_vrr\n";
+print OUT "min_str_vrr\t$min_str_vrr\n";
 print OUT "max_dpf\t$max_depth_fold\n";
 print OUT "min_mapq\t$min_mapQ\n";
 print OUT "max_sar\t$max_SAR\n";
+print OUT "min_align\t$min_align_rate\n";
 print OUT "mismatch_rate\t$max_mismatch\n";
 print OUT "indel_rate\t$indel_rate\n";
 print OUT "incl_sec\t$include_secalign\n";
+print OUT "platform\t$platform\n";
 print OUT "targeted\t$targeted_seq\n";
 print OUT "exclude\t$exclude_bed\n";
 print OUT "non_human\t$non_human\n";
@@ -488,15 +575,6 @@ print OUT "yass_path\t$yass_path\n" if ($yass_path ne '');
 print OUT "multalin_path\t$multalin_path\n" if ($multalin_path ne '');
 
 close (OUT);
-
-my %target_chr;
-my @tchr = split (/,/, $chr_analyzed) if ($chr_analyzed ne 'ALL');
-map{$target_chr{$_} = 1} @tchr;
-
-my %excl_chr;
-my @xchr = split (/,/, $exclude_chr) if ($exclude_chr ne '');
-map{$excl_chr{$_} = 1} @xchr;
-
 
 my @chr;
 open (FILE, $ref_index) or die "$ref_index is not found:$!\n";
@@ -516,15 +594,19 @@ while (my $line = <FILE>){
 }
 close (FILE);
 
-my %out_files;
+my $ML_data_dir = "$data_dir/ML_train/CLR";
+$ML_data_dir = "$data_dir/ML_train/ONT" if ($platform ne 'ont');
 
+my %out_files;
 my $count = 0;
 my @jobs;
+
+
 foreach my $chr (@chr){
-    my $out_file = "$temp_dir/$out_prefix.chr$chr.discov.txt";
-    $out_file = "$temp_dir/$out_prefix.$chr.discov.txt" if ($chr !~ /^[\dXY]+$/);
-    if ((-f $out_file) and ($skip_step =~ /1/)){
-        $out_files{$chr} = $out_file;
+    my $out_chr = "$temp_dir/$out_prefix.chr$chr.discov.txt";
+    $out_chr = "$temp_dir/$out_prefix.$chr.discov.txt" if ($chr !~ /^[\dXY]+$/);
+    if ((-f $out_chr) and ($skip_step =~ /1/)){
+        $out_files{$chr} = $out_chr;
         next;
     }
     $count ++;
@@ -532,7 +614,7 @@ foreach my $chr (@chr){
     push @jobs, $thread_t;
     if ($count == $cores){
         foreach (@jobs){
-            my ($file1, $chr2, $align_info) = $_->join;
+            my ($file1, $chr2) = $_->join;
 print STDERR "Finished 1st step: $chr2\n";
             $out_files{$chr2} = $file1;
         }
@@ -550,18 +632,18 @@ print STDERR "Finished 1st step: $chr2\n";
     undef @jobs;
 }
 
-my %out_files_2;
 my @jobs2;
 my $count2 = 0;
+my %out_files_2;
 
 foreach my $chr (@chr){
     next if (!exists $out_files{$chr});
     my $out_chr = $out_files{$chr};
+    my $out_chr2 = "$temp_dir/$out_prefix.chr$chr.discov.out";
+    $out_chr2 = "$temp_dir/$out_prefix.$chr.discov.out" if ($chr !~ /^[\dXY]+$/);
 
-    my $out_file = "$temp_dir/$out_prefix.chr$chr.discov.out";
-    $out_file = "$temp_dir/$out_prefix.$chr.discov.out" if ($chr !~ /^[\dXY]+$/);
-    if ((-f $out_file) and ($skip_step =~ /2/)){
-        $out_files_2{$chr} = $out_file;
+    if ((-f $out_chr2) and ($skip_step =~ /2/)){
+        $out_files_2{$chr} = $out_chr2;
         next;
     }
     if (!-f $out_chr){
@@ -592,9 +674,9 @@ print STDERR "Finished 2nd step: $chr2\n";
     undef @jobs2;
 }
 
-my %out_files_3;
 my @jobs3;
 my $count3 = 0;
+my %out_files_3;
 
 foreach my $chr (@chr){
     next if (!exists $out_files_2{$chr});
@@ -647,8 +729,7 @@ foreach my $chr (@chr){
     open (FILE, $out_chr) or die "$out_chr is not found: $!\n";
     while (my $line = <FILE>){
         chomp $line;
-        my ($chr2, $pos, $type, $len, $info) = split (/\t/, $line);
-print STDERR "$chr\n" if (!defined $info);
+        my ($chr, $pos, $type, $len, $info) = split (/\t/, $line);
         my $type2 = $type;
         $type2 =~ s/-BP$// if ($type2 =~ /-BP$/);
         $type2 =~ s/-BP2$// if ($type2 =~ /-BP2$/);
@@ -857,7 +938,6 @@ foreach my $type (keys %eval_call){
             next if (exists $removed{$pos1});
             my $end1 = $pos1;
             my ($tag1, $len1, $info1) = split (/=/, ${${$eval_call{$type}}{$chr}}{$pos1});
-            next if ($len1 < 20) and ($len1 > 0);
             $end1 = $pos1 + $len1 - 1 if ($type ne 'INS');
             my $read_num1 = 0;
             if ($info1 =~ /RN-(\d+)/){
@@ -875,7 +955,6 @@ foreach my $type (keys %eval_call){
                 last if ($pos2 > $end1 + 1000);
                 my $end2 = $pos2;
                 my ($tag2, $len2, $info2) = split (/=/, ${${$eval_call{$type}}{$chr}}{$pos2});
-                next if ($len2 < 20) and ($len2 > 0);
                 $end2 = $pos2 + $len2 - 1 if ($type ne 'INS');
                 my $read_num2 = 0;
                 if ($info2 =~ /RN-(\d+)/){
@@ -1000,6 +1079,7 @@ foreach my $type (keys %eval_call){
 }
 
 my %svtype;
+my %svtype_filt;
 my %sv2;
 my %del_pos;
 
@@ -1217,7 +1297,7 @@ foreach my $chr (sort keys %sv){
             }
             my $int_dup_info = '';
             my $MEI_info = '';
-            if ($iduppos eq ''){
+            if ($iduppos ne ''){
                 $int_dup_info = "$iduppos-$iduplen";
             }
             if (scalar keys %MEI > 0){
@@ -1262,8 +1342,8 @@ foreach my $chr (sort keys %sv){
             else{
                 $select_gt = $top_gt;
             }
-            my $sum_sar = 0;
             my $ave_sar = 0;
+            my $sum_sar = 0;
             map{$sum_sar += $_} @sar;
             $ave_sar = int ($sum_sar / @sar * 100 + 0.5) / 100 if (@sar > 0);
             my $line = '';
@@ -1271,7 +1351,7 @@ foreach my $chr (sort keys %sv){
                 my $ins_info = '';
                 my $type_info = '';
                 if ($dupbplen > 0){
-                    $ins_info .= "BPLEN=$dupbplen;"; 
+                    $ins_info .= "BPLEN=$dupbplen;";
                     $type_info = "BP:DUP:";
                     $end += $dupbplen;
                 }
@@ -1298,7 +1378,7 @@ foreach my $chr (sort keys %sv){
                     $ins_info .= "DUPPOS=$dup_pos;DUPLEN=$dup_len;" if ($dup_pos > 0);
                     $ins_info .= "DUPLEN=$dup_len;" if ($dup_pos == 0);
                     $type_info .= "$TAG:";
-                }
+                } 
                 if ($MEI_info ne ''){
                     $ins_info .= "MEI=$MEI_info;";
                     my $mei_str = '';
@@ -1306,7 +1386,7 @@ foreach my $chr (sort keys %sv){
                         $mei_str .= "$mei.";
                     }
                     $mei_str =~ s/\.$//;
-                    $type_info .= "ME:$mei_str:";
+                    $type_info .= "MEI:$mei_str:";
                 }
                 if (($ins_info =~ /DUPLEN=/) and ($ins_info !~ /DUPPOS=/) and ($ins_info !~ /DUPBPLEN=/)){
                     $ins_info =~ s/DUPLEN=\d+;//;
@@ -1354,7 +1434,7 @@ foreach my $chr (sort keys %sv){
                         $mei_str .= "$mei.";
                     }
                     $mei_str =~ s/\.$//;
-                    $type_info .= "MEI:$mei_str:";
+                    $type_info .= "ME:$mei_str:";
                 }
                 if (@mTD > 0){
                     if ($select_gt eq 'HT'){
@@ -1561,8 +1641,8 @@ foreach my $chr (sort keys %sv2){
             my @line = split (/\t/, ${${$sv2{$chr}}{$pos}}{$type});
             my $end = $1 if ($line[7] =~ /END=(\d+)/);
             my $read = $1 if ($line[7] =~ /READS=(\d+)/);
+            my $sig = $1 if ($line[7] =~ /SVSIG=([^;]+)/);
             my $svlen = $1 if ($line[7] =~ /SVLEN=(\d+)/);
-            next if ($svlen < 20);
             my $vrr = $1 if ($line[7] =~ /VRR=([\d\.]+)/);
             ${$del_pos{$chr2}}{$pos} = $svlen if ($type eq 'DEL');
             if ((abs ($pre_end - $pos) < $bp_diff) or (abs ($pre_pos - $pos) < $bp_diff)){
@@ -1640,7 +1720,6 @@ foreach my $chr (sort keys %sv2){       # merge homozygous neigboring/overlappin
             next if ($gt ne 'HM');
             my $end = $1 if ($line[7] =~ /END=(\d+)/);
             my $len = $1 if ($line[7] =~ /SVLEN=(\d+)/);
-            next if ($len < 3);
             my $vrr = $1 if ($line[7] =~ /VRR=([\d\.]+)/);
             my $read = $1 if ($line[7] =~ /READS=(\d+)/);
             my $dpr = 1;
@@ -1651,7 +1730,7 @@ foreach my $chr (sort keys %sv2){       # merge homozygous neigboring/overlappin
             if (($pre_end > 0) and ($end > $pre_end) and (abs ($pre_end - $pos) < $bp_diff) and ($distance <= $len * 0.5) and ($distance <= $pre_len * 0.5) and ($pre_vrr >= 0.2) and ($vrr >= 0.2) and (($pre_vrr >= 0.8) or ($vrr >= 0.8))){
                 $flag = 1;
             }
-            elsif (($distance <= 500) and ($end > $pre_end) and ($distance <= $len * 0.2) and ($distance <= $pre_len * 0.2) and ($pre_vrr >= 0.2) and ($vrr >= 0.2) and (($pre_vrr >= 0.8) or ($vrr >= 0.8))){
+            elsif (($distance <= 500) and ($end > $pre_end) and ($distance <= $len * 0.5) and ($distance <= $pre_len * 0.5) and ($pre_vrr >= 0.2) and ($vrr >= 0.2) and (($pre_vrr >= 0.8) or ($vrr >= 0.8))){
                 $flag = 1;
             }
             elsif (($pre_end > 0) and ($distance < 0) and ($pre_vrr >= 0.8) and ($vrr < 0.2)){
@@ -1670,7 +1749,7 @@ foreach my $chr (sort keys %sv2){       # merge homozygous neigboring/overlappin
                 $pre_line =~ s/SVLEN=\d+/SVLEN=$new_len/;
                 $pre_line =~ s/READS=\d+/READS=$read/;
                 $pre_line =~ s/VRR=[\d\.]+/VRR=$vrr/;
-                $pre_line =~ s/DPR=[\d\.]+/DPR=$dpr/ if ($pre_line =~ /DPR=/) and ($line[7] =~ /DPR=/);
+                $pre_line =~ s/DPR=[\d\.]+/DPR=$dpr/;
                 $pre_line =~ s/END=\d+/END=$end/;
                 $pre_line =~ s/SAR=[\d\.]+/SAR=$sar/;
                 ${${$sv2{$chr}}{$pre_pos}}{$type} = $pre_line;
@@ -1737,7 +1816,7 @@ foreach my $chr (keys %sv2){
                 }
                 elsif ($type eq 'INS'){
                     my $len = $1 if (${${$sv2{$chr}}{$pos}}{$type} =~ /;SVLEN=(\d+)/);
-                    ${$ins_sv{$chr}}{$pos} = $len if ($len >= 20);
+                    ${$ins_sv{$chr}}{$pos} = $len;
                 }
             }
         }
@@ -1746,16 +1825,30 @@ foreach my $chr (keys %sv2){
 
 my $pre_ipos = 0;
 my $pre_ilen = 0;
-foreach my $chr (keys %ins_sv){ 
+foreach my $chr (keys %ins_sv){
     foreach my $ipos (sort {$a <=> $b} keys %{$ins_sv{$chr}}){
         next if (!exists ${${$sv2{$chr}}{$ipos}}{'INS'});
         my $ilen = ${$ins_sv{$chr}}{$ipos};
         my $distance = $ipos - $pre_ipos;
+        my $line = ${${$sv2{$chr}}{$ipos}}{'INS'};
+        my $read = $1 if ($line =~ /READS=(\d+)/);
+        my $BP = 0;
+        $BP = $1 if ($line =~ /BP=(\d+)/);
+        if ($BP == 2){
+            if ($read <= 3){
+                delete ${${$sv2{$chr}}{$ipos}}{'INS'};
+                next;
+            }
+        }
+        elsif ($BP == 3){
+            if ($read <= 4){
+                delete ${${$sv2{$chr}}{$ipos}}{'INS'};
+                next;
+            }
+        }
         if (($distance <= $bp_diff3) and ($distance < $pre_ilen) and ($distance < $ilen) and ($pre_ilen > 0) and ($ilen > 0) and ($pre_ilen / $ilen <= 1.5) and ($pre_ilen / $ilen >= 0.66) and (exists ${${$sv2{$chr}}{$pre_ipos}}{'INS'})){
             my $pre_line = ${${$sv2{$chr}}{$pre_ipos}}{'INS'};
-            my $line = ${${$sv2{$chr}}{$ipos}}{'INS'};
             my $pre_read = $1 if ($pre_line =~ /READS=(\d+)/);
-            my $read = $1 if ($line =~ /READS=(\d+)/);
             my $pre_vrr = $1 if ($pre_line =~ /VRR=([\d\.]+)/);
             my $vrr = $1 if ($line =~ /VRR=([\d\.]+)/);
             my $new_read = $pre_read + $read;
@@ -2074,7 +2167,7 @@ foreach my $chr (keys %dup_sv){     # merge DUP overlapping TR with TR-CNV
                     $len1 = $1 if ($sline =~ /SVLEN=(\d+)/);
                     $len2 = $1 if ($sline =~ /SVLEN=\d+,(\d+)/);
                     $cn1 = $1 if ($sline =~ /CN=gain\+([\d\.]+)/) and ($stype1 eq 'INS');
-                    $cn1 = $1 if ($sline =~ /CN=loss-([\d\.]+)/) and ($stype1 eq 'DEL');
+                    $cn1 = $1 if ($sline =~ /CN=lossn-([\d\.]+)/) and ($stype1 eq 'DEL');
                     $cn2 = $1 if ($sline =~ /CN=gain\+[\d\.]+,gain\+([\d\.]+)/) and ($stype1 eq 'INS') and ($len2 > 0);
                     $cn2 = $1 if ($sline =~ /CN=loss-[\d\.]+,gain\+([\d\.]+)/) and ($stype1 eq 'DEL') and ($stype2 eq 'INS');
                     $gt1 = $1 if ($sline =~ /GT=(.+?);/);
@@ -2141,22 +2234,17 @@ foreach my $chr (keys %dup_sv){     # merge DUP overlapping TR with TR-CNV
     }
 }
 
-foreach my $chr (sort keys %str_sv){            # remove TR-CNV with < min_tr_vrr VRR
+foreach my $chr (sort keys %str_sv){            # remove TR-CNV with < min_str_vrr VRR
     foreach my $pos (sort {$a <=> $b} keys %{$str_sv{$chr}}){
         next if (!exists ${${$sv2{$chr}}{$pos}}{'TR'});
         my $sline = ${${$sv2{$chr}}{$pos}}{'TR'};
         my $vrr1 = $1 if ($sline =~ /VRR=([\d\.]+)/);
-        my $len1 = $1 if ($sline =~ /SVLEN=(\d+)/);
-        if (($len1 <= 3) and ($vrr1 < $min_str_vrr2)){
-            delete ${${$sv2{$chr}}{$pos}}{'TR'};
-        }
-        elsif ($vrr1 < $min_str_vrr){
+        if ($vrr1 < $min_str_vrr){
             delete ${${$sv2{$chr}}{$pos}}{'TR'};
         }
         elsif ($sline =~ /VRR=[\d\.]+,([\d\.]+)/){
             my $vrr2 = $1;
-            my $len2 = $1 if ($sline =~ /SVLEN=\d+,(\d+)/);
-            if ((($len2 > 3) and ($vrr2 < 0.1)) or (($len2 <= 3) and ($vrr2 <= $min_str_vrr2))){
+            if ($vrr2 < 0.1){
                 my $type = $1 if ($sline =~ /SVTYPE=(.+?);/);
                 my $type1 = $type;
                 if ($type =~ /,/){
@@ -2227,16 +2315,11 @@ foreach my $chr (sort keys %sv2){
             my $end = $pos + $len - 1;
             $end = $pos if ($type eq 'INS');
             my $read = $1 if ($svline =~ /READS=([\d,]+)/);
-            my $vrr = $1 if ($svline =~ /VRR=([\d\.,]+)/);
             if ($type eq 'TR'){
+                my $vrr = $1 if ($svline =~ /VRR=([\d\.,]+)/);
                 if ($read !~ /,/){
                     $vrr = $1 if ($vrr =~ /(.+),/);
                     if (($read < $min_str_reads) or ($vrr < $min_str_vrr)){
-                        delete ${${$sv2{$chr}}{$pos}}{$type};
-                        delete ${$sv2{$chr}}{$pos} if (scalar keys %{${$sv2{$chr}}{$pos}} == 0);
-                        next;
-                    }
-                    if (($read < $min_str_reads) or (($len <= 3) and ($vrr < $min_str_vrr2))){
                         delete ${${$sv2{$chr}}{$pos}}{$type};
                         delete ${$sv2{$chr}}{$pos} if (scalar keys %{${$sv2{$chr}}{$pos}} == 0);
                         next;
@@ -2251,23 +2334,7 @@ foreach my $chr (sort keys %sv2){
                     }
                     if ($vrr =~ /,/){
                         my ($vrr1, $vrr2) = split (/,/, $vrr);
-                        my ($len1, $len2) = split (/,/, $len);
                         if (($vrr1 < $min_str_vrr) and ($vrr2 < $min_str_vrr)){
-                            delete ${${$sv2{$chr}}{$pos}}{$type};
-                            delete ${$sv2{$chr}}{$pos} if (scalar keys %{${$sv2{$chr}}{$pos}} == 0);
-                            next;
-                        }
-                        if (($len1 <= 3) and ($vrr1 < $min_str_vrr2) and ($len2 <= 3) and ($vrr2 < $min_str_vrr2)){
-                            delete ${${$sv2{$chr}}{$pos}}{$type};
-                            delete ${$sv2{$chr}}{$pos} if (scalar keys %{${$sv2{$chr}}{$pos}} == 0);
-                            next;
-                        }
-                        if (($len1 <= 3) and ($vrr1 < $min_str_vrr2) and ($vrr2 < $min_str_vrr)){
-                            delete ${${$sv2{$chr}}{$pos}}{$type};
-                            delete ${$sv2{$chr}}{$pos} if (scalar keys %{${$sv2{$chr}}{$pos}} == 0);
-                            next;
-                        }
-                        if (($vrr1 < $min_str_vrr) and ($len2 <= 3) and ($vrr2 < $min_str_vrr2)){
                             delete ${${$sv2{$chr}}{$pos}}{$type};
                             delete ${$sv2{$chr}}{$pos} if (scalar keys %{${$sv2{$chr}}{$pos}} == 0);
                             next;
@@ -2275,11 +2342,6 @@ foreach my $chr (sort keys %sv2){
                     }
                     else{
                         if ($vrr < $min_str_vrr){
-                            delete ${${$sv2{$chr}}{$pos}}{$type};
-                            delete ${$sv2{$chr}}{$pos} if (scalar keys %{${$sv2{$chr}}{$pos}} == 0);
-                            next;
-                        }
-                        if (($vrr < $min_str_vrr2) and ($len !~ /,/) and ($len <= 3)){
                             delete ${${$sv2{$chr}}{$pos}}{$type};
                             delete ${$sv2{$chr}}{$pos} if (scalar keys %{${$sv2{$chr}}{$pos}} == 0);
                             next;
@@ -2293,17 +2355,7 @@ foreach my $chr (sort keys %sv2){
                     delete ${$sv2{$chr}}{$pos} if (scalar keys %{${$sv2{$chr}}{$pos}} == 0);
                     next;
                 }
-                elsif (($type eq 'INS') and ($len < 10) and ($vrr < $min_VRR2)){
-                    delete ${${$sv2{$chr}}{$pos}}{$type};
-                    delete ${$sv2{$chr}}{$pos} if (scalar keys %{${$sv2{$chr}}{$pos}} == 0);
-                    next;
-                }
                 elsif (($type eq 'DEL') and ($read < $min_del_reads)){
-                    delete ${${$sv2{$chr}}{$pos}}{$type};
-                    delete ${$sv2{$chr}}{$pos} if (scalar keys %{${$sv2{$chr}}{$pos}} == 0);
-                    next;
-                }
-                elsif (($type eq 'DEL') and ($len < 10) and ($vrr < $min_VRR2)){
                     delete ${${$sv2{$chr}}{$pos}}{$type};
                     delete ${$sv2{$chr}}{$pos} if (scalar keys %{${$sv2{$chr}}{$pos}} == 0);
                     next;
@@ -2444,6 +2496,83 @@ foreach my $chr (sort keys %sv2){
     }
 }
 
+foreach my $chr (sort keys %sv2){   # add TR-DEL located within large DELs
+    my $chr2 = $chr;
+    $chr2 =~ s/^0*//;
+    foreach my $pos (sort {$a <=> $b} keys %{$sv2{$chr}}){
+        foreach my $type (keys %{${$sv2{$chr}}{$pos}}){
+            next if ($type ne 'DEL');
+            my $line = ${${$sv2{$chr}}{$pos}}{$type};
+            my @line = split (/\t/, $line);
+            my $len = $1 if ($line =~ /SVLEN=(\d+)/);
+            my $end = $pos + $len - 1;
+            my $vrr = $1 if ($line =~ /VRR=([\d\.]+)/);
+            my $read = $1 if ($line =~ /READS=(\d+)/);
+            my $gt = $1 if ($line =~ /GT=(.+?);/);
+            my $sar = $1 if ($line =~ /SAR=([\d\.]+)/);
+            if (($len >= 50) and ($vrr >= 0.2) and ($read >= 3)){
+                my $Mbin1 = int ($pos / $Mbin_size);
+                my $Mbin2 = int ($end / $Mbin_size);
+                my %hit_rpos;
+                foreach my $rpos (sort {$a <=> $b} keys %{${$repeat{$chr2}}{$Mbin1}}){
+                    last if ($rpos > $end);
+                    my $rend = ${${$repeat{$chr2}}{$Mbin1}}{$rpos};
+                    next if ($rend < $pos);
+                    if (($rpos >= $pos) and ($rend <= $end)){
+                        $hit_rpos{$rpos} = 1;
+                    }
+                }
+                if ($Mbin2 > $Mbin1){
+                    foreach my $rpos (sort {$a <=> $b} keys %{${$repeat{$chr2}}{$Mbin2}}){
+                        last if ($rpos > $end);
+                        my $rend = ${${$repeat{$chr2}}{$Mbin2}}{$rpos};
+                        next if ($rend < $pos);
+                        if (($rpos >= $pos) and ($rend <= $end)){
+                            $hit_rpos{$rpos} = 1;
+                        }
+                    }
+                }
+                if (scalar keys %hit_rpos > 0){
+                    foreach my $rpos (keys %hit_rpos){
+                        if (exists ${${$sv2{$chr}}{$rpos}}{'TR'}){
+                            my $str_line = ${${$sv2{$chr}}{$rpos}}{'TR'};
+                            my $str_type = $1 if ($str_line =~ /SVTYPE=(.+?);/);
+                            my $str_gt = $1 if ($str_line =~ /GT=(.+?);/);
+                            if (($gt eq 'HT') and ($str_type eq 'INS') and ($str_gt eq 'HT')){
+                                my @str_line = split (/\t/, $str_line);
+                                my $str_ulen = $1 if ($str_line =~ /TRULEN=(\d+)/);
+                                my $str_end = $1 if ($str_line =~ /TREND=(\d+)/);
+                                my $del_len = $str_end - $rpos + 1;
+                                my $del_cn = int ($del_len / $str_ulen * 10 + 0.5) / 10;
+                                $str_line[7] =~ s/SVTYPE=INS/SVTYPE=INS,DEL/;
+                                my $ins_len = $1 if ($str_line =~ /SVLEN=(\d+)/);
+                                $str_line[7] =~ s/SVLEN=$ins_len/SVLEN=$ins_len,$del_len/;
+                                my $ins_cn = $1 if ($str_line =~ /CN=(.+?);/);
+                                $str_line[7] =~ s/CN=$ins_cn/CN=$ins_cn,loss-$del_cn/;
+                                my $ins_vrr = $1 if ($str_line =~ /VRR=([\d\.]+)/);
+                                $str_line[7] =~ s/VRR=$ins_vrr/VRR=$ins_vrr,$vrr/;
+                                my $ins_read = $1 if ($str_line =~ /READS=(\d+)/);
+                                $str_line[7] =~ s/READS=$ins_read/READS=$ins_read,$read/;
+                                $str_line[7] =~ s/GT=HT/GT=HT2/;
+                                $str_line = join ("\t", @str_line);
+                                ${${$sv2{$chr}}{$rpos}}{'TR'} = $str_line;
+                            }
+                        }
+                        else{
+                            my $strid = ${$STR{$chr2}}{$rpos};
+                            my ($rpos2, $rend, $mlen) = split (/=/, $STR2{$strid});
+                            my $strlen = $rend - $rpos + 1;
+                            my $cn = int ($strlen / $mlen * 10 + 0.5) / 10;
+                            my $str_line = "$chr\t$rpos\t.\t.\t<CNV:TR>\t.\tPASS\tSVTYPE=DEL;SVLEN=$strlen;READS=$read;CN=loss-$cn;VRR=$vrr;SAR=$sar;GT=$gt;END=$rend;TRID=$strid;TREND=$rend;TRULEN=$mlen";
+                            ${${$sv2{$chr}}{$rpos}}{'TR'} = $str_line;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 foreach my $chr (sort keys %sv2){   # add uTR ID to the overlapping SV and mark LowConf for low-confident SVs within uTR region
     my $chr2 = $chr;
     $chr2 =~ s/^0*//;
@@ -2531,8 +2660,271 @@ foreach my $chr (sort keys %sv2){   # add uTR ID to the overlapping SV and mark 
     }
 }
 
+my %sv3;
+my $min_consec_num = 4;
+my $max_consec_range = 1000;
+
+foreach my $chr (sort keys %sv2){
+    foreach my $pos (sort {$a <=> $b} keys %{$sv2{$chr}}){
+        foreach my $type (keys %{${$sv2{$chr}}{$pos}}){
+            if ($type =~ /DEL|INS/){
+                my $svline = ${${$sv2{$chr}}{$pos}}{$type};
+                next if ($svline =~ /LowConf/);
+                ${${$sv3{$type}}{$chr}}{$pos} = $svline;
+            }
+        }
+    }
+}
+
+foreach my $type (sort keys %sv3){          # remove >= 4 consectutive DELs or INSs in 1 Kb window
+    foreach my $chr (sort keys %{$sv3{$type}}){
+        my @pos;
+        foreach my $pos (sort {$a <=> $b} keys %{${$sv3{$type}}{$chr}}){
+            push @pos, $pos;
+            if (@pos >= $min_consec_num){
+                if ($pos[-1] - $pos[0] <= $max_consec_range){
+                }
+                else{
+                    my $last_pos = $pos[-1];
+                    if (@pos >= $min_consec_num + 1){
+                        foreach my $cpos (@pos){
+                            next if ($cpos == $last_pos);
+                            if (exists ${${$sv2{$chr}}{$cpos}}{$type}){
+                                delete ${${$sv2{$chr}}{$cpos}}{$type};
+                                delete ${$sv2{$chr}}{$cpos} if (scalar keys %{${$sv2{$chr}}{$cpos}} == 0);
+                            }
+                        }
+                        @pos = ($last_pos);
+                    }
+                    else{
+                        shift @pos;
+                    }
+                }
+            }
+            elsif ($pos[-1] - $pos[0] > $max_consec_range){
+                shift @pos;
+            }
+        }
+    }
+}
+
+my %DEL_filt;
+my %INS_filt;
+my $del_filt = 0;
+my $ins_filt = 0;
+my $DEL_test_num = 0;
+my $INS_test_num = 0;
+
+if ($disable_ML_filter == 0){
+    my $ML_DEL_test = "$temp_dir/DEL.data.txt";
+    my $ML_INS_test = "$temp_dir/INS.data.txt";
+    my $ML_DEL_train = '';
+    my $ML_INS_train = '';
+    my $XGB_DEL_pred = "$temp_dir/DEL.XGB.pred.out";
+    my $XGB_INS_pred = "$temp_dir/INS.XGB.pred.out";
+    system ("rm $XGB_DEL_pred") if (-f $XGB_DEL_pred);
+    system ("rm $XGB_INS_pred") if (-f $XGB_INS_pred);
+    my $max_read = 8;
+    my $max_vrr = 0.3;
+    if ($min_ins_reads == 2){
+        $ML_INS_train = "$ML_data_dir/INS.mr2.data.txt";
+    }
+    elsif ($min_ins_reads == 3){
+        $ML_INS_train = "$ML_data_dir/INS.mr3.data.txt";
+    }
+    elsif ($min_ins_reads == 4){
+        $ML_INS_train = "$ML_data_dir/INS.mr4.data.txt";
+    }
+    elsif ($min_ins_reads == 5){
+        $ML_INS_train = "$ML_data_dir/INS.mr5.data.txt";
+    }
+    elsif ($min_ins_reads > 5){
+        $ML_INS_train = "$ML_data_dir/INS.mr6.data.txt";
+    }
+    if ($min_del_reads == 2){
+        $ML_DEL_train = "$ML_data_dir/DEL.mr2.data.txt";
+    }
+    elsif ($min_del_reads == 3){
+        $ML_DEL_train = "$ML_data_dir/DEL.mr3.data.txt";
+    }
+    elsif ($min_del_reads == 4){
+        $ML_DEL_train = "$ML_data_dir/DEL.mr4.data.txt";
+    }
+    elsif ($min_del_reads == 5){
+        $ML_DEL_train = "$ML_data_dir/DEL.mr5.data.txt";
+    }
+    elsif ($min_del_reads > 5){
+        $ML_DEL_train = "$ML_data_dir/DEL.mr6.data.txt";
+    }
+    open (OUTD, "> $ML_DEL_test");
+    open (OUTI, "> $ML_INS_test");
+    print OUTD "TF\tPOS\tNUM\tLEN\tLENSD\tPOSSD\tVRR\tDP\tMQ\n";
+    print OUTI "TF\tPOS\tNUM\tLEN\tLENSD\tPOSSD\tVRR\tDP\tMQ\n";
+    foreach my $chr (@chr){
+        my $discov_file = "$temp_dir/$out_prefix.$chr.discov.txt";
+        $discov_file = "$temp_dir/$out_prefix.chr$chr.discov.txt" if (!-f $discov_file);
+        my $chr02d = $chr;
+        $chr02d = sprintf ("%02d", $chr) if ($chr =~ /^\d+$/);
+        open (FILE, $discov_file) or die "$discov_file is not found: $!\n";
+        while (my $line = <FILE>){
+            chomp $line;
+            my ($chr2, $pos, $type, $len, $info1, $info2, $info3, $info4) = split (/\t/, $line);
+            next if ($type !~ /^DEL$|^INS$/);
+            my $read_num = 0;
+            my $vrr = 0;
+            my @len = ();
+            my @pos = ();
+            my @info = ();
+            my $sum_len = 0;
+            my $sum_pos = 0;
+            my $sum_len_diff = 0;
+            my $sum_pos_diff = 0;
+            my $ave_len = 0;
+            my $ave_pos = 0;
+            my $sd_lenrate = 0;
+            my $sd_pos = 0;
+            my $dp = 0;
+            my $mq = 30;
+            if ($type eq 'INS'){
+                @info = split (/\|/, $info1);
+                next if (@info <= 1);
+                ($read_num) = split (/,/, $info2);
+                foreach (@info){
+                    my ($id, $dir, $ilen, $rpos, $ipos) = split (/=/, $_);
+                    push @len, $ilen;
+                    push @pos, $ipos;
+                }
+                my @info2 = split (/,/, $info2);
+                $vrr = $info2[2];
+                $dp = $info2[1];
+                $mq = $info3 if (defined $info3) and ($info3 ne '');
+            }
+            elsif ($type eq 'DEL'){
+                @info = split (/,/, $info2);
+                next if (@info <= 1);
+                $read_num = $info1;
+                foreach (@info){
+                    my ($id, $dlen, $dpos) = split (/=/, $_);
+                    push @len, $dlen;
+                    push @pos, $dpos;
+                }
+                my @info3 = split (/,/, $info3);
+                $vrr = $info3[2];
+                $dp = $info3[1];
+                $mq = $info4 if (defined $info4) and ($info4 ne '');
+            }
+            next if ($read_num > $max_read) and ($vrr > $max_vrr);
+            map{$sum_pos += $_} @pos;
+            $ave_pos = int ($sum_pos / @pos + 0.5);
+            map{$sum_pos_diff += int (($ave_pos - $_) ** 2)} @pos;
+            $sd_pos = int (($sum_pos_diff / @pos) ** 0.5 * 10 + 0.5) / 10;
+            if (@len > 0){
+                map{$sum_len += $_} @len;
+                $ave_len = int ($sum_len / @len + 0.5);
+                my @lenrate;
+                foreach my $len (@len){
+                    my $rate = int ($len / $ave_len * 1000 + 0.5) / 10;
+                    push @lenrate, $rate;
+                }
+                map{$sum_len_diff += (100 - $_) ** 2} @lenrate;
+                $sd_lenrate = int (($sum_len_diff / @lenrate) ** 0.5 * 10 + 0.5) / 10;
+            }
+            my $chrpos = "$chr2:$pos";
+            next if (!exists ${${$sv2{$chr02d}}{$pos}}{$type});
+            my $out_line = "1\t$chrpos\t$read_num\t$len\t$sd_lenrate\t$sd_pos\t$vrr\t$dp\t$mq"; 
+            if ($type eq 'DEL'){
+                print OUTD "$out_line\n";
+                $DEL_test_num ++;
+            }
+            elsif ($type eq 'INS'){
+                print OUTI "$out_line\n";
+                $INS_test_num ++;
+            }
+        }
+        close (FILE);
+    }
+    close (OUTD);
+    close (OUTI);
+
+    system ("Rscript --slave --vanilla $R_script_DEL $ML_DEL_train $ML_DEL_test $XGB_DEL_pred") if ($DEL_test_num > 0);
+    system ("Rscript --slave --vanilla $R_script_INS $ML_INS_train $ML_INS_test $XGB_INS_pred") if ($INS_test_num > 0);
+    
+    my $DEL_pred_num = 0;
+    my $INS_pred_num = 0;
+    my %del_pred;
+    my %ins_pred;
+    if ($DEL_test_num > 0){
+        open (FILE, $XGB_DEL_pred) or die "$XGB_DEL_pred is not found:$!\n";
+        while (my $line = <FILE>){
+            chomp $line;
+            my ($count, $TF) = split (/\s+/, $line);
+            $del_pred{$count} = 0 if ($TF == 0);
+            $DEL_pred_num = $count;
+        }
+        close (FILE);
+    }
+    if ($INS_test_num > 0){
+        open (FILE, $XGB_INS_pred) or die "$XGB_INS_pred is not found:$!\n";
+        while (my $line = <FILE>){
+            chomp $line;
+            my ($count, $TF) = split (/\s+/, $line);
+            $ins_pred{$count} = 0 if ($TF == 0);
+            $INS_pred_num = $count;
+        }
+        close (FILE);
+    }
+    my $inconsist_flag = 0;
+    if ($DEL_test_num != $DEL_pred_num){
+        print STDERR "Inconsistent XGB DEL prediction: test num: $DEL_test_num predict num: $DEL_pred_num\n";
+        $inconsist_flag = 1;
+    }
+    if ($INS_test_num != $INS_pred_num){
+        print STDERR "Inconsistent XGB INS prediction: test num: $INS_test_num predict num: $INS_pred_num\n";
+        $inconsist_flag = 1;
+    }
+    if ($inconsist_flag == 0){
+        my $count = 0;
+        open (FILE, $ML_DEL_test) or die "$ML_DEL_test is not found: $!\n";
+        while (my $line = <FILE>){
+            chomp $line;
+            next if ($line =~ /^TF/);
+            $count ++;
+            my ($tag, $chrpos) = split (/\t/, $line);
+            my ($chr, $pos) = split (/:/, $chrpos);
+            if (exists $del_pred{$count}){
+                ${$DEL_filt{$chr}}{$pos} = 1;
+                $del_filt ++;
+            }
+        }
+        close (FILE);
+        $count = 0;
+        open (FILE, $ML_INS_test) or die "$ML_INS_test is not found: $!\n";
+        while (my $line = <FILE>){
+            chomp $line;
+            next if ($line =~ /^TF/);
+            $count ++;
+            my ($tag, $chrpos) = split (/\t/, $line);
+            my ($chr, $pos) = split (/:/, $chrpos);
+            if (exists $ins_pred{$count}){
+                ${$INS_filt{$chr}}{$pos} = 1;
+                $ins_filt ++;
+            }
+        }
+        close (FILE);
+    }
+}
+
+my %lowconf_sv2;
+my %lowqual_sv2;
+my $filt_flag = 0;
+$filt_flag = 1 if ($del_filt > 0) or ($ins_filt > 0);
+print STDERR "# Machine-learning-based filtering for DELs/INSs outside TR regions with <= 0.3 VRR & <= 8 READS\n";
+print STDERR "Filtered DELs: $del_filt out of $DEL_test_num\tFiltered INSs: $ins_filt out of $INS_test_num\n";
+
 my $out_vcf = "$out_prefix.discov.vcf";
+my $out_vcf_filt = "$out_prefix.discov.filt.vcf";
 open (OUT, "> $out_vcf");
+open (OUTF, "> $out_vcf_filt") if ($filt_flag == 1);
 print OUT "##INFO=<ID=SVTYPE,Number=.,Type=String,Description=\"Type of tandem repeat expansion/contraction (TR-CNV) and structural variation (SV)\">\n";
 print OUT "##INFO=<ID=SVLEN,Number=.,Type=Integer,Description=\"Difference in length between REF and ALT alleles (0 when undefined)\">\n";
 print OUT "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position of the variantdescribed in this record\">\n";
@@ -2581,7 +2973,59 @@ print OUT "##ALT=<ID=INV:Description=\"Inversion\">\n";
 print OUT "##ALT=<ID=TRA:INS:Description=\"Inserted translocation\">\n";
 print OUT "##ALT=<ID=TRA:DEL:Description=\"Deleted translocation\">\n";
 print OUT "##ALT=<ID=REP:Description=\"Replacement\">\n";
+if ($filt_flag == 1){
+    print OUTF "##INFO=<ID=SVTYPE,Number=.,Type=String,Description=\"Type of tandem repeat expansion/contraction (TR-CNV) and structural variation (SV)\">\n";
+    print OUTF "##INFO=<ID=SVLEN,Number=.,Type=Integer,Description=\"Difference in length between REF and ALT alleles (0 when undefined)\">\n";
+    print OUTF "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position of the variantdescribed in this record\">\n";
+    print OUTF "##INFO=<ID=BPLEN,Number=1,Type=Integer,Description=\"Breakpoint distance of INS:BP\">\n";
+    print OUTF "##INFO=<ID=DUPPOS,Number=1,Type=Integer,Description=\"Reference position of tandem duplication found between INS sequence and reference\">\n";
+    print OUTF "##INFO=<ID=DUPLEN,Number=1,Type=Integer,Description=\"Length of tandem duplication between INS and reference\">\n";
+    print OUTF "##INFO=<ID=TRAPOS,Number=1,Type=Integer,Description=\"Reference chr:pos of translocated segment\">\n";
+    print OUTF "##INFO=<ID=TRALEN,Number=1,Type=Integer,Description=\"Length of translocated segment\">\n";
+    print OUTF "##INFO=<ID=MEI,Number=1,Type=String,Description=\"Type of mobile element found in INS\">\n";
+    print OUTF "##INFO=<ID=MEILEN,Number=1,Type=Integer,Description=\"Length of mobile element found in INS\">\n";
+    print OUTF "##INFO=<ID=MEICN,Number=1,Type=Integer,Description=\"Extra copy numver of mobile element found in INS\">\n";
+    print OUTF "##INFO=<ID=TRID,Number=1,Type=String,Description=\"TR ID containing TR-CNV\">\n";
+    print OUTF "##INFO=<ID=TREND,Number=1,Type=Integer,Description=\"END position of TR-ID\">\n";
+    print OUTF "##INFO=<ID=TRULEN,Number=1,Type=Integer,Description=\"Length of repeat unit of TR-ID\">\n";
+    print OUTF "##INFO=<ID=TRDUP,Number=1,Type=Float,Description=\"Duplication of the entire TR region (value: DPR of DUP)\">\n";
+    print OUTF "##INFO=<ID=TRUNIT,Number=1,Type=String,Description=\"motif:copy-number detected in INS sequence (only for SVTYPE=INS)\">\n";
+    print OUTF "##INFO=<ID=READS,Number=1,Type=Integer,Description=\"Number of reads supporting the TR-CNV/SV\">\n";
+    print OUTF "##INFO=<ID=BP,Number=1,Type=Integer,Description=\"Number of split-reads (breakpoints) supporting the TR-CNV/SV\">\n";
+    print OUTF "##INFO=<ID=VRR,Number=1,Type=Float,Description=\"Ratio of TR-CNV/SV-supporting reads to read depth at the site\">\n";
+    print OUTF "##INFO=<ID=DPR,Number=1,Type=Float,Description=\"Ratio of read depth in DEL/DUP region to that to the flanking regions (only non-TR-CNV)\">\n";
+    print OUTF "##INFO=<ID=SAR,Number=1,Type=Float,Description=\"Ratio of TR-CNV/SV-supporting reads with mapping quality 0 to total supporting reads, including secondary alignments\">\n";
+    print OUTF "##INFO=<ID=CN,Number=.,Type=Float,Description=\"Copy number of TR repeat unit in TR (gain/loss) or copy number in DUP\">\n";
+    print OUTF "##INFO=<ID=GT,Number=1,Type=String,Description=\"Genotype of SV (HT/HM/NA)\">\n";
+
+    print OUTF "##FILTER=<ID=LowConf,Description=\"Repeat region where TR-CNVs/SVs could be unreliably called\">\n";
+    print OUTF "##FILTER=<ID=LowQual,Description=\"Low quality TR-CNVs/SVs with > $max_SAR SAR\">\n";
+
+    print OUTF "##ALT=<ID=TR:CNV,Description=\"INS(repeat unit expansion) and/or DEL (repeat unit contraction) within Tandem Repeat (TR) regions\">\n";
+    print OUTF "##ALT=<ID=DEL,Description=\"Deletion\">\n";
+    print OUTF "##ALT=<ID=DUP,Description=\"Duplication\">\n";
+    print OUTF "##ALT=<ID=INS,Description=\"Insertion of novel sequence\">\n";
+    print OUTF "##ALT=<ID=INS:DUP,Description=\"Insertion of tandem duplication\">\n";
+    print OUTF "##ALT=<ID=INS:DUP:R,Description=\"Insertion of inverse tandem duplication\">\n";
+    print OUTF "##ALT=<ID=INS:intDUP,Description=\"Insertion of interspersed tandem duplication\">\n";
+    print OUTF "##ALT=<ID=INS:intDUP:R,Description=\"Insertion of interspersed inverse tandem duplication\">\n";
+    print OUTF "##ALT=<ID=INS:BP,Description=\"Insertion with only breakpoints\">\n";
+    print OUTF "##ALT=<ID=INS:BP:DUP,Description=\"Insertion with only breakpoints and with a potentially duplication segment\">\n";
+    print OUTF "##ALT=<ID=INS:BP:DEL,Description=\"Insertion with only breakpoints and with a potentially deletion segment\">\n";
+
+    print OUTF "##ALT=<ID=INS:ME:ALU,Description=\"Insertion of ALU element\">\n";
+    print OUTF "##ALT=<ID=INS:ME:L1,Description=\"Insertion of L1 element\">\n";
+    print OUTF "##ALT=<ID=INS:ME:SVA,Description=\"Insertion of SVA element\">\n";
+    print OUTF "##ALT=<ID=INS:ME:HERVK,Description=\"Insertion of HERVK element\">\n";
+
+    print OUTF "##ALT=<ID=INV:Description=\"Inversion\">\n";
+    print OUTF "##ALT=<ID=TRA:INS:Description=\"Inserted translocation\">\n";
+    print OUTF "##ALT=<ID=TRA:DEL:Description=\"Deleted translocation\">\n";
+    print OUTF "##ALT=<ID=REP:Description=\"Replacement\">\n";
+}
 foreach my $chr (sort keys %sv2){
+    my $chr2 = $chr;
+    $chr2 =~ s/^0*//;
     foreach my $pos (sort {$a <=> $b} keys %{$sv2{$chr}}){
         foreach my $type (keys %{${$sv2{$chr}}{$pos}}){
             my $svline = ${${$sv2{$chr}}{$pos}}{$type};
@@ -2593,16 +3037,51 @@ foreach my $chr (sort keys %sv2){
                     $svtype{'TR2'} ++;
                 }
             }
+            if ($filt_flag == 1){
+                if ($type eq 'DEL'){
+                    print OUTF "$svline\n" if (!exists ${$DEL_filt{$chr2}}{$pos});
+                    $svtype_filt{$type} ++ if (!exists ${$DEL_filt{$chr2}}{$pos});
+                    $lowconf_sv2{$type} ++ if (!exists ${$DEL_filt{$chr2}}{$pos}) and ($svline =~ /LowConf/);
+                    $lowqual_sv2{$type} ++ if (!exists ${$DEL_filt{$chr2}}{$pos}) and ($svline !~ /LowConf/) and ($svline =~ /LowQual/);
+                }
+                elsif ($type eq 'INS'){
+                    print OUTF "$svline\n" if (!exists ${$INS_filt{$chr2}}{$pos});
+                    $svtype_filt{$type} ++ if (!exists ${$INS_filt{$chr2}}{$pos});
+                    $lowconf_sv2{$type} ++ if (!exists ${$INS_filt{$chr2}}{$pos}) and ($svline =~ /LowConf/);
+                    $lowqual_sv2{$type} ++ if (!exists ${$INS_filt{$chr2}}{$pos}) and ($svline !~ /LowConf/) and ($svline =~ /LowQual/);
+                }
+                else{
+                    print OUTF "$svline\n";
+                    $svtype_filt{$type} ++;
+                    $lowconf_sv2{$type} ++ if ($svline =~ /LowConf/);
+                    $lowqual_sv2{$type} ++ if ($svline !~ /LowConf/) and ($svline =~ /LowQual/);
+                    if ($type eq 'TR'){
+                        $svtype_filt{'TR2'} ++;
+                        $lowqual_sv2{'TR2'} ++ if ($svline !~ /LowConf/) and ($svline =~ /LowQual/);
+                        if ($svline =~ /SVLEN=\d+,\d+/){
+                            $svtype_filt{'TR2'} ++;
+                            $lowqual_sv2{'TR2'} ++ if ($svline !~ /LowConf/) and ($svline =~ /LowQual/);
+                        }
+                    }
+                }
+            }
         }
     }
 }
 close (OUT);
+close (OUTF) if ($filt_flag == 1);
 
 my $out_ins = "$out_prefix.discov.INS.fa";
 open (OUT, "> $out_ins");
 foreach my $chr (sort keys %INS){
+    my $chr2 = $chr;
+    $chr2 =~ s/^0*//;
     foreach my $pos (sort {$a <=> $b} keys %{$INS{$chr}}){
-        print OUT ${$INS{$chr}}{$pos};
+        my $lines = ${$INS{$chr}}{$pos};
+        if (exists ${$INS_filt{$chr2}}{$pos}){
+            $lines = '#' . $lines;
+        }
+        print OUT $lines;
     }
 }
 close (OUT);
@@ -2612,8 +3091,8 @@ print STDERR "#TR-CNVs/SVs removed from the excluded regions: $excluded_sv\n" if
 my $total_calls = 0;
 my $total_high_calls = 0;
 
-print STDERR "\n#Summary of called SVs\n";
-print STDERR "#Type\tNumber\tNumber(excluding LowConf&LowQual)\n";
+print STDERR "\n#Summary of called SVs (pre-filtered)\n";
+print STDERR "#Type\tNumber\tNumber(excluding LowConf)\n";
 foreach my $type (sort keys %svtype){
     my $type2 = $type;
     $type2 = 'CNV-TR-site' if ($type eq 'TR');
@@ -2629,14 +3108,36 @@ foreach my $type (sort keys %svtype){
     print STDERR "$type2\t$num\t$num2\n";
 }
 print STDERR "Total\t$total_calls\t$total_high_calls\n";
+if ($filt_flag == 1){
+    my $total_calls_filt = 0;
+    my $total_high_calls_filt = 0;
+    print STDERR "\n#Summary of called SVs (post-filtered)\n";
+    print STDERR "#Type\tNumber\tNumber(excluding LowConf)\n";
+    foreach my $type (sort keys %svtype_filt){
+        my $type2 = $type;
+        $type2 = 'CNV-TR-site' if ($type eq 'TR');
+        $type2 = 'CNV-TR-allele' if ($type eq 'TR2');
+        my $num = $svtype_filt{$type};
+        my $lowconf = 0;
+        my $lowqual = 0;
+        $lowconf = $lowconf_sv2{$type} if (exists $lowconf_sv2{$type});
+        $lowqual = $lowqual_sv2{$type} if (exists $lowqual_sv2{$type});
+        my $num2 = $num - $lowconf - $lowqual;
+        $total_calls_filt += $num if ($type ne 'TR');
+        $total_high_calls_filt += $num2 if ($type ne 'TR');
+        print STDERR "$type2\t$num\t$num2\n";
+    }
+    print STDERR "Total\t$total_calls_filt\t$total_high_calls_filt\n";
+}
 
 
 sub run_step1{
     my ($config, $chr) = @_;
-    system ("$Bin/TRsv_hifi_step1.pl $config $chr") if ($min_indel_size > 3);
-    system ("$Bin/TRsv_hifi_ml1_step1.pl $config $chr") if ($min_indel_size <= 3);
+
+    system ("$Bin/TRsv_nonhifi_step1.pl $config $chr");
     my $out_file = "$temp_dir/$out_prefix.chr$chr.discov.txt";
     $out_file = "$temp_dir/$out_prefix.$chr.discov.txt" if ($chr !~ /^[\dXY]+$/);
+
     threads->yield();
     sleep 1;
 
@@ -2646,7 +3147,7 @@ sub run_step1{
 sub run_step2{
     my ($config, $chr, $step1_out) = @_;
 
-    system ("$Bin/TRsv_hifi_step2.pl $config $chr $step1_out");
+    system ("$Bin/TRsv_nonhifi_step2.pl $config $chr $step1_out");
     my $out_file = "$temp_dir/$out_prefix.chr$chr.discov.out";
     $out_file = "$temp_dir/$out_prefix.$chr.discov.out" if ($chr !~ /^[\dXY]+$/);
 
@@ -2668,5 +3169,3 @@ sub run_step3{
 
     return ($out_file, $chr);
 }
-
-
