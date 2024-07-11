@@ -79,10 +79,10 @@ if ($command eq 'call'){
         die "call command: --platform/-x option not specified in your argument or configure file:\n";
     }
     if ($hifi_flag == 1){
-        $script = "$script_dir/TRsv_hifi_v1.0.pl";
+        $script = "$script_dir/TRsv_hifi_v1.1.pl";
     }
     else{
-        $script = "$script_dir/TRsv_nonhifi_v1.0.pl";
+        $script = "$script_dir/TRsv_nonhifi_v1.1.pl";
     }
 }
 elsif ($command eq 'joint_call'){
