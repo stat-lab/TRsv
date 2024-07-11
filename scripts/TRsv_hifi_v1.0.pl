@@ -33,7 +33,6 @@ my $samtool_path = '';
 my $yass_path = '';
 my $trf_path = '';
 my $multalin_path = '';
-my $minimap_path = '';
 
 print "# $0 @ARGV\n";
 
@@ -165,7 +164,6 @@ GetOptions(
     'trf_path|tp=s' => \$trf_path,
     'yass_path|yp=s' => $yass_path,
     'multalin_path|mp=s' => \$multalin_path,
-    'minimap_path|mmp=s' => \$minimap_path,
     'help|h' => \$help,
     
 ) or pod2usage(-verbose => 0);
@@ -208,7 +206,6 @@ pod2usage(-verbose => 0) if $help;
    --trf_path or -tp <STR>      path of trf (${trf_path}/trf) if the corresponding path is not set in $PATH
    --yass_path or -yp <STR>     path of yass (${yass_path}/yass) if the corresponding path is not set in $PATH
    --multalin_path or -mp <STR> path of multalin (${multalin_path}/multalin) if the corresponding path is not set in $PATH
-   --minimap_path or -mmp <STR> path of minimap2 (${minimap2_path}/minimap2) if the corresponding path is not set in $PATH
 
    --min_ins_read or -mir <INT> minimum number of reads supporting INSs/DUPs/INVs [default: 2]
    --min_del_read or -mdr <INT> minimum number of reads supporting DELs [default: 2]
@@ -375,7 +372,7 @@ if ($trf_path eq ''){
     }
 }
 else{
-    if (!-f "$trf_path/trf"){
+    if (!-f "$samtool_path/samtools"){
         die "trf does not exist in the specified path: $trf_path:\n";
     }
     $ENV{PATH} = "$trf_path:" . $ENV{PATH};
@@ -401,23 +398,10 @@ if ($multalin_path eq ''){
     }
 }
 else{
-    if (!-f "$multalin_path/multalin"){
+    if (!-f "$multalin_path/yass"){
         die "multalin does not exist in the specified path: $multalin_path:\n";
     }
     $ENV{PATH} = "$multalin_path:" . $ENV{PATH};
-}
-if ($minimap_path eq ''){
-    my $MMpath = `which minimap2`;
-    chomp $MMpath;
-    if (($MMpath =~ /\s/) or (!-f $MMpath)){
-        die "minimap2 path is not specified with --minimap_path or not in PATH:\n";
-    }
-}
-else{
-    if (!-f "$minimap_path/minimap2"){
-        die "minimap2 does not exist in the specified path: $multalin_path:\n";
-    }
-    $ENV{PATH} = "$minimap_path:" . $ENV{PATH};
 }
 
 if ($non_human == 0){
@@ -2454,6 +2438,83 @@ foreach my $chr (sort keys %sv2){
                     $lowconf_sv{$type} ++;
                     $svline = join ("\t", @svline);
                     ${${$sv2{$chr}}{$pos}}{$type} = $svline;
+                }
+            }
+        }
+    }
+}
+
+foreach my $chr (sort keys %sv2){   # add TR-DEL located within large DELs
+    my $chr2 = $chr;
+    $chr2 =~ s/^0*//;
+    foreach my $pos (sort {$a <=> $b} keys %{$sv2{$chr}}){
+        foreach my $type (keys %{${$sv2{$chr}}{$pos}}){
+            next if ($type ne 'DEL');
+            my $line = ${${$sv2{$chr}}{$pos}}{$type};
+            my @line = split (/\t/, $line);
+            my $len = $1 if ($line =~ /SVLEN=(\d+)/);
+            my $end = $pos + $len - 1;
+            my $vrr = $1 if ($line =~ /VRR=([\d\.]+)/);
+            my $read = $1 if ($line =~ /READS=(\d+)/);
+            my $gt = $1 if ($line =~ /GT=(.+?);/);
+            my $sar = $1 if ($line =~ /SAR=([\d\.]+)/);
+            if (($len >= 50) and ($vrr >= 0.2) and ($read >= 3)){
+                my $Mbin1 = int ($pos / $Mbin_size);
+                my $Mbin2 = int ($end / $Mbin_size);
+                my %hit_rpos;
+                foreach my $rpos (sort {$a <=> $b} keys %{${$repeat{$chr2}}{$Mbin1}}){
+                    last if ($rpos > $end);
+                    my $rend = ${${$repeat{$chr2}}{$Mbin1}}{$rpos};
+                    next if ($rend < $pos);
+                    if (($rpos >= $pos) and ($rend <= $end)){
+                        $hit_rpos{$rpos} = 1;
+                    }
+                }
+                if ($Mbin2 > $Mbin1){
+                    foreach my $rpos (sort {$a <=> $b} keys %{${$repeat{$chr2}}{$Mbin2}}){
+                        last if ($rpos > $end);
+                        my $rend = ${${$repeat{$chr2}}{$Mbin2}}{$rpos};
+                        next if ($rend < $pos);
+                        if (($rpos >= $pos) and ($rend <= $end)){
+                            $hit_rpos{$rpos} = 1;
+                        }
+                    }
+                }
+                if (scalar keys %hit_rpos > 0){
+                    foreach my $rpos (keys %hit_rpos){
+                        if (exists ${${$sv2{$chr}}{$rpos}}{'TR'}){
+                            my $str_line = ${${$sv2{$chr}}{$rpos}}{'TR'};
+                            my $str_type = $1 if ($str_line =~ /SVTYPE=(.+?);/);
+                            my $str_gt = $1 if ($str_line =~ /GT=(.+?);/);
+                            if (($gt eq 'HT') and ($str_type eq 'INS') and ($str_gt eq 'HT')){
+                                my @str_line = split (/\t/, $str_line);
+                                my $str_ulen = $1 if ($str_line =~ /TRULEN=(\d+)/);
+                                my $str_end = $1 if ($str_line =~ /TREND=(\d+)/);
+                                my $del_len = $str_end - $rpos + 1;
+                                my $del_cn = int ($del_len / $str_ulen * 10 + 0.5) / 10;
+                                $str_line[7] =~ s/SVTYPE=INS/SVTYPE=INS,DEL/;
+                                my $ins_len = $1 if ($str_line =~ /SVLEN=(\d+)/);
+                                $str_line[7] =~ s/SVLEN=$ins_len/SVLEN=$ins_len,$del_len/;
+                                my $ins_cn = $1 if ($str_line =~ /CN=(.+?);/);
+                                $str_line[7] =~ s/CN=$ins_cn/CN=$ins_cn,loss-$del_cn/;
+                                my $ins_vrr = $1 if ($str_line =~ /VRR=([\d\.]+)/);
+                                $str_line[7] =~ s/VRR=$ins_vrr/VRR=$ins_vrr,$vrr/;
+                                my $ins_read = $1 if ($str_line =~ /READS=(\d+)/);
+                                $str_line[7] =~ s/READS=$ins_read/READS=$ins_read,$read/;
+                                $str_line[7] =~ s/GT=HT/GT=HT2/;
+                                $str_line = join ("\t", @str_line);
+                                ${${$sv2{$chr}}{$rpos}}{'TR'} = $str_line;
+                            }
+                        }
+                        else{
+                            my $strid = ${$STR{$chr2}}{$rpos};
+                            my ($rpos2, $rend, $mlen) = split (/=/, $STR2{$strid});
+                            my $strlen = $rend - $rpos + 1;
+                            my $cn = int ($strlen / $mlen * 10 + 0.5) / 10;
+                            my $str_line = "$chr\t$rpos\t.\t.\t<CNV:TR>\t.\tPASS\tSVTYPE=DEL;SVLEN=$strlen;READS=$read;CN=loss-$cn;VRR=$vrr;SAR=$sar;GT=$gt;END=$rend;TRID=$strid;TREND=$rend;TRULEN=$mlen";
+                            ${${$sv2{$chr}}{$rpos}}{'TR'} = $str_line;
+                        }
+                    }
                 }
             }
         }
