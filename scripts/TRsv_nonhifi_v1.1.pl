@@ -2636,7 +2636,7 @@ foreach my $chr (sort keys %sv2){   # add TR-DEL located within large DELs and D
                     }
                 }
                 if (scalar keys %hit_rpos > 0){
-                    if ($type eq 'DEL'){
+                    if (($type eq 'DEL') and ($sar < 0.3) and ($len <= 50000)){
                         foreach my $rpos (keys %hit_rpos){
                             if (exists ${${$sv2{$chr}}{$rpos}}{'TR'}){
                                 my $str_line = ${${$sv2{$chr}}{$rpos}}{'TR'};
