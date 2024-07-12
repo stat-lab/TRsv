@@ -2616,7 +2616,7 @@ foreach my $chr (sort keys %sv2){   # add TR-DEL located within large DELs and D
                                 my ($rpos2, $rend, $mlen) = split (/=/, $STR2{$strid});
                                 my $strlen = $rend - $rpos + 1;
                                 my $cn = int ($strlen / $mlen * 10 + 0.5) / 10;
-                                my $str_line = "$chr\t$rpos\t.\t.\t<CNV:TR>\t.\tPASS\tSVTYPE=DEL;SVLEN=$strlen;READS=$read;CN=loss-$cn;VRR=$vrr;SAR=$sar;GT=$gt;END=$rend;TRID=$strid;TREND=$rend;TRULEN=$mlen";
+                                my $str_line = "$chr2\t$rpos\t.\t.\t<CNV:TR>\t.\tPASS\tSVTYPE=DEL;SVLEN=$strlen;READS=$read;CN=loss-$cn;VRR=$vrr;SAR=$sar;GT=$gt;END=$rend;TRID=$strid;TREND=$rend;TRULEN=$mlen";
                                 ${${$sv2{$chr}}{$rpos}}{'TR'} = $str_line;
                                 $added_str_del ++;
                             }
@@ -2659,7 +2659,7 @@ foreach my $chr (sort keys %sv2){   # add TR-DEL located within large DELs and D
                                 my ($rpos2, $rend, $mlen) = split (/=/, $STR2{$strid});
                                 my $strlen = ($rend - $rpos + 1) * $dup_cn;
                                 my $cn = int ($strlen / $mlen * 10 + 0.5) / 10 * $dup_cn;
-                                my $str_line = "$chr\t$rpos\t.\t.\t<CNV:TR>\t.\tPASS\tSVTYPE=INS;SVLEN=$strlen;READS=$read;CN=gain+$cn;VRR=$vrr;SAR=$sar;GT=$gt;END=$rend;TRID=$strid;TREND=$rend;TRULEN=$mlen";
+                                my $str_line = "$chr2\t$rpos\t.\t.\t<CNV:TR>\t.\tPASS\tSVTYPE=INS;SVLEN=$strlen;READS=$read;CN=gain+$cn;VRR=$vrr;SAR=$sar;GT=$gt;END=$rend;TRID=$strid;TREND=$rend;TRULEN=$mlen";
                                 ${${$sv2{$chr}}{$rpos}}{'TR'} = $str_line;
                                 $added_str_ins ++;
                             }
