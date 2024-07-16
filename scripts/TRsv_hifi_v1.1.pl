@@ -2561,7 +2561,7 @@ foreach my $chr (sort keys %sv2){   # add TR-DEL located within large DELs and D
             my $read = $1 if ($line =~ /READS=(\d+)/);
             my $gt = $1 if ($line =~ /GT=(.+?);/);
             my $sar = $1 if ($line =~ /SAR=([\d\.]+)/);
-            if (($len >= 50) and ($vrr >= 0.2) and ($read >= 3)){
+            if (($len >= 50) and ($vrr >= 0.2) and ($read >= 3) and ($sar < 0.3) and ($len <= 20000)){
                 my $Mbin1 = int ($pos / $Mbin_size);
                 my $Mbin2 = int ($end / $Mbin_size);
                 my %hit_rpos;
@@ -2584,7 +2584,7 @@ foreach my $chr (sort keys %sv2){   # add TR-DEL located within large DELs and D
                     }
                 }
                 if (scalar keys %hit_rpos > 0){
-                    if (($type eq 'DEL') and ($sar < 0.3) and ($len <= 50000)){
+                    if ($type eq 'DEL'){
                         foreach my $rpos (keys %hit_rpos){
                             if (exists ${${$sv2{$chr}}{$rpos}}{'TR'}){
                                 my $str_line = ${${$sv2{$chr}}{$rpos}}{'TR'};
@@ -2608,6 +2608,7 @@ foreach my $chr (sort keys %sv2){   # add TR-DEL located within large DELs and D
                                     $str_line[7] =~ s/GT=HT/GT=HT2/;
                                     $str_line = join ("\t", @str_line);
                                     ${${$sv2{$chr}}{$rpos}}{'TR'} = $str_line;
+                                    $str_line .= ";ENCSV=$pos-$type-$len";
                                     $added_str_del ++;
                                 }
                             }
@@ -2616,13 +2617,13 @@ foreach my $chr (sort keys %sv2){   # add TR-DEL located within large DELs and D
                                 my ($rpos2, $rend, $mlen) = split (/=/, $STR2{$strid});
                                 my $strlen = $rend - $rpos + 1;
                                 my $cn = int ($strlen / $mlen * 10 + 0.5) / 10;
-                                my $str_line = "$chr2\t$rpos\t.\t.\t<CNV:TR>\t.\tPASS\tSVTYPE=DEL;SVLEN=$strlen;READS=$read;CN=loss-$cn;VRR=$vrr;SAR=$sar;GT=$gt;END=$rend;TRID=$strid;TREND=$rend;TRULEN=$mlen";
+                                my $str_line = "$chr2\t$rpos\t.\t.\t<CNV:TR>\t.\tPASS\tSVTYPE=DEL;SVLEN=$strlen;READS=$read;CN=loss-$cn;VRR=$vrr;SAR=$sar;GT=$gt;END=$rend;TRID=$strid;TREND=$rend;TRULEN=$mlen;ENCSV=$pos-$type-$len";
                                 ${${$sv2{$chr}}{$rpos}}{'TR'} = $str_line;
                                 $added_str_del ++;
                             }
                         }
                     }
-                    elsif (($type eq 'DUP') and ($sar < 0.3) and ($len <= 10000)){
+                    elsif ($type eq 'DUP'){
                         my $dpr = $1 if ($line =~ /DPR=([\d\.]+)/);
                         next if ($dpr < 1.2);
                         my $dup_cn = $1 if ($line =~ /CN=([\d\.]+)/);
@@ -2651,6 +2652,7 @@ foreach my $chr (sort keys %sv2){   # add TR-DEL located within large DELs and D
                                     $str_line[7] =~ s/GT=HT/GT=HT2/;
                                     $str_line = join ("\t", @str_line);
                                     ${${$sv2{$chr}}{$rpos}}{'TR'} = $str_line;
+                                    $str_line .= ";ENCSV=$pos-$type-$len";
                                     $added_str_ins ++;
                                 }
                             }
@@ -2659,7 +2661,7 @@ foreach my $chr (sort keys %sv2){   # add TR-DEL located within large DELs and D
                                 my ($rpos2, $rend, $mlen) = split (/=/, $STR2{$strid});
                                 my $strlen = ($rend - $rpos + 1) * $dup_cn;
                                 my $cn = int ($strlen / $mlen * 10 + 0.5) / 10 * $dup_cn;
-                                my $str_line = "$chr2\t$rpos\t.\t.\t<CNV:TR>\t.\tPASS\tSVTYPE=INS;SVLEN=$strlen;READS=$read;CN=gain+$cn;VRR=$vrr;SAR=$sar;GT=$gt;END=$rend;TRID=$strid;TREND=$rend;TRULEN=$mlen";
+                                my $str_line = "$chr2\t$rpos\t.\t.\t<CNV:TR>\t.\tPASS\tSVTYPE=INS;SVLEN=$strlen;READS=$read;CN=gain+$cn;VRR=$vrr;SAR=$sar;GT=$gt;END=$rend;TRID=$strid;TREND=$rend;TRULEN=$mlen;ENCSV=$pos-$type-$len";
                                 ${${$sv2{$chr}}{$rpos}}{'TR'} = $str_line;
                                 $added_str_ins ++;
                             }
@@ -2696,7 +2698,8 @@ print OUT "##INFO=<ID=VRR,Number=1,Type=Float,Description=\"Ratio of TR-CNV/SV-s
 print OUT "##INFO=<ID=DPR,Number=1,Type=Float,Description=\"Ratio of read depth in DEL/DUP region to that to the flanking regions (only non-TR-CNV)\">\n";
 print OUT "##INFO=<ID=SAR,Number=1,Type=Float,Description=\"Ratio of TR-CNV/SV-supporting reads with mapping quality 0 to total supporting reads, including secondary alignments\">\n";
 print OUT "##INFO=<ID=CN,Number=.,Type=Float,Description=\"Copy number of TR repeat unit in TR (gain/loss) or copy number in DUP\">\n";
-print OUT "##INFO=<ID=GT,Number=1,Type=String,Description=\"Genotype of SV (HT/HM/NA)\">\n";
+print OUT "##INFO=<ID=ENCSV,Number=1,Type=String,Description=\"Position-Type-Size of DUP or DEL encompassing the TR region to be assigned as TR-INS or TR-DEL\">\n";
+print OUT "##INFO=<ID=GT,Number=1,Type=String,Description=\"Genotype of SV (HT/HT2/HM/NA, HT2: multiallelic genotype)\">\n";
 
 print OUT "##FILTER=<ID=LowConf,Description=\"Repeat region where TR-CNVs/SVs could be unreliably called\">\n";
 print OUT "##FILTER=<ID=LowQual,Description=\"Low quality TR-CNVs/SVs with > $max_SAR SAR\">\n";
