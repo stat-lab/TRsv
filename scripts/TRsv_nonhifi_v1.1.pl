@@ -2642,25 +2642,37 @@ foreach my $chr (sort keys %sv2){   # add TR-DEL located within large DELs and D
                                 my $str_line = ${${$sv2{$chr}}{$rpos}}{'TR'};
                                 my $str_type = $1 if ($str_line =~ /SVTYPE=(.+?);/);
                                 my $str_gt = $1 if ($str_line =~ /GT=(.+?);/);
-                                if (($gt eq 'HT') and ($str_type eq 'INS') and ($str_gt eq 'HT')){
+                                if ($str_gt eq 'HT'){
                                     my @str_line = split (/\t/, $str_line);
-                                    my $str_ulen = $1 if ($str_line =~ /TRULEN=(\d+)/);
-                                    my $str_end = $1 if ($str_line =~ /TREND=(\d+)/);
+                                    my $str_ulen = $1 if ($str_line =~ /STRULEN=(\d+)/);
+                                    my $str_end = $1 if ($str_line =~ /STREND=(\d+)/);
                                     my $del_len = $str_end - $rpos + 1;
                                     my $del_cn = int ($del_len / $str_ulen * 10 + 0.5) / 10;
-                                    $str_line[7] =~ s/SVTYPE=INS/SVTYPE=INS,DEL/;
-                                    my $ins_len = $1 if ($str_line =~ /SVLEN=(\d+)/);
-                                    $str_line[7] =~ s/SVLEN=$ins_len/SVLEN=$ins_len,$del_len/;
-                                    my $ins_cn = $1 if ($str_line =~ /CN=(.+?);/);
-                                    $str_line[7] =~ s/CN=$ins_cn/CN=$ins_cn,loss-$del_cn/;
-                                    my $ins_vrr = $1 if ($str_line =~ /VRR=([\d\.]+)/);
-                                    $str_line[7] =~ s/VRR=$ins_vrr/VRR=$ins_vrr,$vrr/;
-                                    my $ins_read = $1 if ($str_line =~ /READS=(\d+)/);
-                                    $str_line[7] =~ s/READS=$ins_read/READS=$ins_read,$read/;
-                                    $str_line[7] =~ s/GT=HT/GT=HT2/;
+                                    my $str_len = $1 if ($str_line =~ /SVLEN=(\d+)/);
+                                    my $str_vrr = $1 if ($str_line =~ /VRR=([\d\.]+)/);
+                                    my $str_read = $1 if ($str_line =~ /READS=(\d+)/);
+                                    my $str_cn = $1 if ($str_line =~ /CN=(.+?);/);
+                                    if ($str_type eq 'INS'){
+                                        $str_line[7] =~ s/SVLEN=$str_len/SVLEN=$str_len,$del_len/;
+                                        $str_line[7] =~ s/SVTYPE=INS/SVTYPE=INS,DEL/;
+                                        $str_line[7] =~ s/CN=$str_cn/CN=$str_cn,loss-$del_cn/;
+                                        $str_line[7] =~ s/VRR=$str_vrr/VRR=$str_vrr,$vrr/;
+                                        $str_line[7] =~ s/READS=$str_read/READS=$str_read,$read/;
+                                        $str_line[7] =~ s/GT=HT/GT=HT2/;
+                                    }
+                                    elsif ($str_type eq 'DEL'){
+                                        my $lenrate = int ($del_len / $str_len * 100 + 0.5) / 100;
+                                        if ($lenrate >= 2){
+                                            $str_line[7] =~ s/SVLEN=$str_len/SVLEN=$str_len,$del_len/;
+                                            $str_line[7] =~ s/CN=$str_cn/CN=$str_cn,$del_cn/;
+                                            $str_line[7] =~ s/VRR=$str_vrr/VRR=$str_vrr,$vrr/;
+                                            $str_line[7] =~ s/READS=$str_read/READS=$str_read,$read/;
+                                            $str_line[7] =~ s/GT=HT/GT=HT2/;
+                                        }
+                                    }
                                     $str_line = join ("\t", @str_line);
-                                    ${${$sv2{$chr}}{$rpos}}{'TR'} = $str_line;
                                     $str_line .= ";ENCSV=$pos-$type-$len";
+                                    ${${$sv2{$chr}}{$rpos}}{'STR'} = $str_line;
                                     $added_str_del ++;
                                 }
                             }
@@ -2686,25 +2698,37 @@ foreach my $chr (sort keys %sv2){   # add TR-DEL located within large DELs and D
                                 my $str_line = ${${$sv2{$chr}}{$rpos}}{'TR'};
                                 my $str_type = $1 if ($str_line =~ /SVTYPE=(.+?);/);
                                 my $str_gt = $1 if ($str_line =~ /GT=(.+?);/);
-                                if (($gt eq 'HT') and ($str_type eq 'DEL') and ($str_gt eq 'HT')){
+                                if ($str_gt eq 'HT'){
                                     my @str_line = split (/\t/, $str_line);
-                                    my $str_ulen = $1 if ($str_line =~ /TRULEN=(\d+)/);
-                                    my $str_end = $1 if ($str_line =~ /TREND=(\d+)/);
+                                    my $str_ulen = $1 if ($str_line =~ /STRULEN=(\d+)/);
+                                    my $str_end = $1 if ($str_line =~ /STREND=(\d+)/);
                                     my $ins_len = ($str_end - $rpos + 1) * $dup_cn;
                                     my $ins_cn = int ($ins_len / $str_ulen * 10 + 0.5) / 10 * $dup_cn;
-                                    $str_line[7] =~ s/SVTYPE=DEL/SVTYPE=DEL,INS/;
-                                    my $del_len = $1 if ($str_line =~ /SVLEN=(\d+)/);
-                                    $str_line[7] =~ s/SVLEN=$del_len/SVLEN=$del_len,$ins_len/;
-                                    my $del_cn = $1 if ($str_line =~ /CN=(.+?);/);
-                                    $str_line[7] =~ s/CN=$del_cn/CN=$del_cn,gain+$ins_cn/;
-                                    my $del_vrr = $1 if ($str_line =~ /VRR=([\d\.]+)/);
-                                    $str_line[7] =~ s/VRR=$del_vrr/VRR=$del_vrr,$vrr/;
-                                    my $del_read = $1 if ($str_line =~ /READS=(\d+)/);
-                                    $str_line[7] =~ s/READS=$del_read/READS=$del_read,$read/;
-                                    $str_line[7] =~ s/GT=HT/GT=HT2/;
+                                    my $str_len = $1 if ($str_line =~ /SVLEN=(\d+)/);
+                                    my $str_cn = $1 if ($str_line =~ /CN=(.+?);/);
+                                    my $str_vrr = $1 if ($str_line =~ /VRR=([\d\.]+)/);
+                                    my $str_read = $1 if ($str_line =~ /READS=(\d+)/);
+                                    if ($str_type eq 'DEL'){
+                                        $str_line[7] =~ s/SVTYPE=DEL/SVTYPE=DEL,INS/;
+                                        $str_line[7] =~ s/SVLEN=$str_len/SVLEN=$str_len,$ins_len/;
+                                        $str_line[7] =~ s/CN=$str_cn/CN=$str_cn,gain+$ins_cn/;
+                                        $str_line[7] =~ s/VRR=$str_vrr/VRR=$str_vrr,$vrr/;
+                                        $str_line[7] =~ s/READS=$str_read/READS=$str_read,$read/;
+                                        $str_line[7] =~ s/GT=HT/GT=HT2/;
+                                    }
+                                    elsif ($str_type eq 'INS'){
+                                        my $lenrate = int ($ins_len / $str_len * 100 + 0.5) / 100;
+                                        if ($lenrate >= 2){
+                                            $str_line[7] =~ s/SVLEN=$str_len/SVLEN=$str_len,$ins_len/;
+                                            $str_line[7] =~ s/CN=$str_cn/CN=$str_cn,$ins_cn/;
+                                            $str_line[7] =~ s/VRR=$str_vrr/VRR=$str_vrr,$vrr/;
+                                            $str_line[7] =~ s/READS=$str_read/READS=$str_read,$read/;
+                                            $str_line[7] =~ s/GT=HT/GT=HT2/;
+                                        }
+                                    }
                                     $str_line = join ("\t", @str_line);
-                                    ${${$sv2{$chr}}{$rpos}}{'TR'} = $str_line;
                                     $str_line .= ";ENCSV=$pos-$type-$len";
+                                    ${${$sv2{$chr}}{$rpos}}{'STR'} = $str_line;
                                     $added_str_ins ++;
                                 }
                             }
