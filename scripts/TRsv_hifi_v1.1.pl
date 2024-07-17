@@ -2569,8 +2569,21 @@ foreach my $chr (sort keys %sv2){   # add TR-DEL located within large DELs and D
                     last if ($rpos > $end);
                     my $rend = ${${$repeat{$chr2}}{$Mbin1}}{$rpos};
                     next if ($rend < $pos);
+                    my $rlen = $rend - $rpos + 1;
                     if (($rpos >= $pos) and ($rend <= $end)){
-                        $hit_rpos{$rpos} = 1;
+                        $hit_rpos{$rpos} = $rlen;
+                    }
+                    elsif (($rpos >= $pos) and ($rpos <= $end)){
+                        my $overlap = $end - $rpos + 1;
+                        if ($overlap >= 50){
+                            $hit_rpos{$rpos} = $overlap;
+                        } 
+                    }
+                    elsif (($rend >= $pos) and ($rend <= $end)){
+                        my $overlap = $rend - $pos + 1;
+                        if ($overlap >= 50){
+                            $hit_rpos{$rpos} = $overlap;
+                        }
                     }
                 }
                 if ($Mbin2 > $Mbin1){
@@ -2578,23 +2591,36 @@ foreach my $chr (sort keys %sv2){   # add TR-DEL located within large DELs and D
                         last if ($rpos > $end);
                         my $rend = ${${$repeat{$chr2}}{$Mbin2}}{$rpos};
                         next if ($rend < $pos);
+                        my $rlen = $rend - $rpos + 1;
                         if (($rpos >= $pos) and ($rend <= $end)){
                             $hit_rpos{$rpos} = 1;
+                        }
+                        elsif (($rpos >= $pos) and ($rpos <= $end)){
+                            my $overlap = $end - $rpos + 1;
+                            if ($overlap >= 50){
+                                $hit_rpos{$rpos} = $overlap;
+                            } 
+                        }
+                        elsif (($rend >= $pos) and ($rend <= $end)){
+                            my $overlap = $rend - $pos + 1;
+                            if ($overlap >= 50){
+                                $hit_rpos{$rpos} = $overlap;
+                            }
                         }
                     }
                 }
                 if (scalar keys %hit_rpos > 0){
                     if ($type eq 'DEL'){
                         foreach my $rpos (keys %hit_rpos){
-                            if (exists ${${$sv2{$chr}}{$rpos}}{'TR'}){
-                                my $str_line = ${${$sv2{$chr}}{$rpos}}{'TR'};
+                            my $del_len = $hit_rpos{$rpos};
+                            if (exists ${${$sv2{$chr}}{$rpos}}{'STR'}){
+                                my $str_line = ${${$sv2{$chr}}{$rpos}}{'STR'};
                                 my $str_type = $1 if ($str_line =~ /SVTYPE=(.+?);/);
                                 my $str_gt = $1 if ($str_line =~ /GT=(.+?);/);
                                 if ($str_gt eq 'HT'){
                                     my @str_line = split (/\t/, $str_line);
                                     my $str_ulen = $1 if ($str_line =~ /STRULEN=(\d+)/);
                                     my $str_end = $1 if ($str_line =~ /STREND=(\d+)/);
-                                    my $del_len = $str_end - $rpos + 1;
                                     my $del_cn = int ($del_len / $str_ulen * 10 + 0.5) / 10;
                                     my $str_len = $1 if ($str_line =~ /SVLEN=(\d+)/);
                                     my $str_vrr = $1 if ($str_line =~ /VRR=([\d\.]+)/);
@@ -2627,10 +2653,9 @@ foreach my $chr (sort keys %sv2){   # add TR-DEL located within large DELs and D
                             else{
                                 my $strid = ${$STR{$chr2}}{$rpos};
                                 my ($rpos2, $rend, $mlen) = split (/=/, $STR2{$strid});
-                                my $strlen = $rend - $rpos + 1;
-                                my $cn = int ($strlen / $mlen * 10 + 0.5) / 10;
-                                my $str_line = "$chr2\t$rpos\t.\t.\t<CNV:TR>\t.\tPASS\tSVTYPE=DEL;SVLEN=$strlen;READS=$read;CN=loss-$cn;VRR=$vrr;SAR=$sar;GT=$gt;END=$rend;TRID=$strid;TREND=$rend;TRULEN=$mlen;ENCSV=$pos-$type-$len";
-                                ${${$sv2{$chr}}{$rpos}}{'TR'} = $str_line;
+                                my $cn = int ($del_len / $mlen * 10 + 0.5) / 10;
+                                my $str_line = "$chr2\t$rpos\t.\t.\t<CNV:STR>\t.\tPASS\tSVTYPE=DEL;SVLEN=$del_len;READS=$read;CN=loss-$cn;VRR=$vrr;SAR=$sar;GT=$gt;END=$rend;STRID=$strid;STREND=$rend;STRULEN=$mlen;ENCSV=$pos-$type-$len";
+                                ${${$sv2{$chr}}{$rpos}}{'STR'} = $str_line;
                                 $added_str_del ++;
                             }
                         }
@@ -2642,15 +2667,16 @@ foreach my $chr (sort keys %sv2){   # add TR-DEL located within large DELs and D
                         $dup_cn -= 2;
                         $dup_cn = 1 if ($dup_cn < 1);
                         foreach my $rpos (keys %hit_rpos){
-                            if (exists ${${$sv2{$chr}}{$rpos}}{'TR'}){
-                                my $str_line = ${${$sv2{$chr}}{$rpos}}{'TR'};
+                            my $ovl_len = $hit_rpos{$rpos};
+                            if (exists ${${$sv2{$chr}}{$rpos}}{'STR'}){
+                                my $str_line = ${${$sv2{$chr}}{$rpos}}{'STR'};
                                 my $str_type = $1 if ($str_line =~ /SVTYPE=(.+?);/);
                                 my $str_gt = $1 if ($str_line =~ /GT=(.+?);/);
                                 if ($str_gt eq 'HT'){
                                     my @str_line = split (/\t/, $str_line);
                                     my $str_ulen = $1 if ($str_line =~ /STRULEN=(\d+)/);
                                     my $str_end = $1 if ($str_line =~ /STREND=(\d+)/);
-                                    my $ins_len = ($str_end - $rpos + 1) * $dup_cn;
+                                    my $ins_len = $ovl_len * $dup_cn;
                                     my $ins_cn = int ($ins_len / $str_ulen * 10 + 0.5) / 10 * $dup_cn;
                                     my $str_len = $1 if ($str_line =~ /SVLEN=(\d+)/);
                                     my $str_cn = $1 if ($str_line =~ /CN=(.+?);/);
@@ -2683,10 +2709,10 @@ foreach my $chr (sort keys %sv2){   # add TR-DEL located within large DELs and D
                             else{
                                 my $strid = ${$STR{$chr2}}{$rpos};
                                 my ($rpos2, $rend, $mlen) = split (/=/, $STR2{$strid});
-                                my $strlen = ($rend - $rpos + 1) * $dup_cn;
-                                my $cn = int ($strlen / $mlen * 10 + 0.5) / 10 * $dup_cn;
-                                my $str_line = "$chr2\t$rpos\t.\t.\t<CNV:TR>\t.\tPASS\tSVTYPE=INS;SVLEN=$strlen;READS=$read;CN=gain+$cn;VRR=$vrr;SAR=$sar;GT=$gt;END=$rend;TRID=$strid;TREND=$rend;TRULEN=$mlen;ENCSV=$pos-$type-$len";
-                                ${${$sv2{$chr}}{$rpos}}{'TR'} = $str_line;
+                                my $ins_len = $ovl_len * $dup_cn;
+                                my $cn = int ($ins_len / $mlen * 10 + 0.5) / 10 * $dup_cn;
+                                my $str_line = "$chr2\t$rpos\t.\t.\t<CNV:STR>\t.\tPASS\tSVTYPE=INS;SVLEN=$ins_len;READS=$read;CN=gain+$cn;VRR=$vrr;SAR=$sar;GT=$gt;END=$rend;STRID=$strid;STREND=$rend;STRULEN=$mlen;ENCSV=$pos-$type-$len";
+                                ${${$sv2{$chr}}{$rpos}}{'STR'} = $str_line;
                                 $added_str_ins ++;
                             }
                         }
