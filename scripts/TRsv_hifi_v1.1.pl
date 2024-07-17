@@ -2561,7 +2561,7 @@ foreach my $chr (sort keys %sv2){   # add TR-DEL located within large DELs and D
             my $read = $1 if ($line =~ /READS=(\d+)/);
             my $gt = $1 if ($line =~ /GT=(.+?);/);
             my $sar = $1 if ($line =~ /SAR=([\d\.]+)/);
-            if (($len >= 50) and ($vrr >= 0.15) and ($read >= 3) and ($sar < 0.3) and ($len <= 20000)){
+            if (($len >= 10) and ($vrr >= 0.15) and ($read >= 3) and ($sar < 0.3) and ($len <= 20000)){
                 my $Mbin1 = int ($pos / $Mbin_size);
                 my $Mbin2 = int ($end / $Mbin_size);
                 my %hit_rpos;
@@ -2575,13 +2575,13 @@ foreach my $chr (sort keys %sv2){   # add TR-DEL located within large DELs and D
                     }
                     elsif (($rpos >= $pos) and ($rpos <= $end)){
                         my $overlap = $end - $rpos + 1;
-                        if ($overlap >= 50){
+                        if ($overlap >= $min_str_indel_size){
                             $hit_rpos{$rpos} = $overlap;
                         } 
                     }
                     elsif (($rend >= $pos) and ($rend <= $end)){
                         my $overlap = $rend - $pos + 1;
-                        if ($overlap >= 50){
+                        if ($overlap >= $min_str_indel_size){
                             $hit_rpos{$rpos} = $overlap;
                         }
                     }
@@ -2597,13 +2597,13 @@ foreach my $chr (sort keys %sv2){   # add TR-DEL located within large DELs and D
                         }
                         elsif (($rpos >= $pos) and ($rpos <= $end)){
                             my $overlap = $end - $rpos + 1;
-                            if ($overlap >= 50){
+                            if ($overlap >= $min_str_indel_size){
                                 $hit_rpos{$rpos} = $overlap;
                             } 
                         }
                         elsif (($rend >= $pos) and ($rend <= $end)){
                             my $overlap = $rend - $pos + 1;
-                            if ($overlap >= 50){
+                            if ($overlap >= $min_str_indel_size){
                                 $hit_rpos{$rpos} = $overlap;
                             }
                         }
