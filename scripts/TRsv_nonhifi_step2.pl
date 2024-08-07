@@ -54,7 +54,7 @@ my $min_str_indel_size = 50;
 my $min_ins_str_mei = 200;
 my $min_str_len_rate = 0.5;
 my $min_str_cn = 0.5;
-my $str_max_len_rate = 1.5;
+my $str_max_len_rate = 1.2;
 
 my $min_del_size = 20;
 my $min_ins_size = 20;
