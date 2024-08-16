@@ -75,7 +75,7 @@ my $min_indel_size = 50;
 my $min_str_indel_size = 0;
 my $min_ins_str_mei = 200;
 my $min_str_len_rate = 0.5;
-my $min_str_cn = 0.1;
+my $min_str_cn = 0.02;
 my $min_str_identity = 70;
 
 my $indel_rate = 10;
@@ -214,7 +214,7 @@ pod2usage(-verbose => 0) if $help;
    --max_tr_rate or -xsr <FLOAT> maximum rate of length for descriminating different TR-CNV alleles at a site [deafult: 1.1, when the ratio of two different STR-CNV length is larger than 1.1 and smaller than 1/1.1, and the difference is statistically significant, these are considered two alleles]
    --min_tr_lrate or -mslr <FLOAT> minimum rate of TR unit content in TR-INS sequence [default: 0.5] (TR-INS that a content of TR unit/motif is smaller than the specified rate is regarded as a normal INS)
                                 If 0 is specified, all INSs within a TR region are regarded as TR-INS without checking the homology between the INS sequence and TR motif
-   --min_tr_cn or -msc <FLOAT>  minimum copy number of TR-CNV [default: 0.1] (TR-CNV with a smaller copy number than the specified value and smaller than the value specified with --min_len is discarded)
+   --min_tr_cn or -msc <FLOAT>  minimum copy number of TR-CNV [default: 0.02] (TR-CNV with a smaller copy number than the specified value and smaller than the value specified with --min_len is discarded)
    --min_tr_ident or -msi <INT> minimum identity (%) of TR-INS sequence with TR motif [default: 70]
    --max_dpf or -xd <FLOAT>     maximum fold of mean read depth to consider SV calling (not call in high-depth regions with specified value x mean depth) [default: 15]
    --max_sar or -sar <FLOAT>    maximum rate of SVs supported by alignments with maping quality 0, including secondary alignmnents (SVs exceeding this value are marked as 'LowQual' in the FILTER field) [default: 0.7]

@@ -47,7 +47,7 @@ my $min_indel_size = 50;
 my $min_str_indel_size = 50;
 my $min_ins_str_mei = 200;
 my $min_str_len_rate = 0.5;
-my $min_str_cn = 0.5;
+my $min_str_cn = 0.02;
 my $str_max_len_rate = 1.1;
 
 my $indel_rate = 10;
@@ -834,6 +834,7 @@ while (my $line = <FILE>){
                         else{
                             $str_flag = 1;
                             $ins_cn = int ($match_len / $motif_size * 10 + 0.5) / 10;
+                            $ins_cn = int ($match_len / $motif_size * 100 + 0.5) / 100 if ($ins_cn == 0);
                             if ($ins_cn < $min_str_cn){
                                 $str_flag = 0;
                             }
@@ -1193,7 +1194,50 @@ while (my $line = <FILE>){
                     }
                     else{
                         if ($motif_size >= $ins_len){
-                            my ($ident, $cov, $match) = &multalin_ins1 ($insseq, $motif, $chr);
+                            my ($ident, $cov, $match) = (0, 0, 0);
+                            if ($ins_len <= 5){
+                                my $motifR2 = $motif . $motif;
+                                if ($motifR2 =~ /$insseq/){
+                                    $ident = 100;
+                                    $cov = 100;
+                                    $match = 5;
+                                }
+                                elsif (($min_str_identity >= 80) and ($ins_len == 5)){
+                                    my $mflag = 0;
+                                    for (my $i = 0; $i <= 4; $i++){
+                                        my $minsseq = $insseq;
+                                        substr ($minsseq, $i, 1, '[ACGT]');
+                                        if ($motifR2 =~ /$minsseq/){
+                                            $mflag = 1;
+                                            last;
+                                        }
+                                    }
+                                    if ($mflag == 1){
+                                        $ident = 80;
+                                        $cov = 80;
+                                        $match = 4;
+                                    }
+                                }
+                                elsif (($min_str_identity >= 75) and ($ins_len == 4)){
+                                    my $mflag = 0;
+                                    for (my $i = 0; $i <= 3; $i++){
+                                        my $minsseq = $insseq;
+                                        substr ($minsseq, $i, 1, '[ACGT]');
+                                        if ($motifR2 =~ /$minsseq/){
+                                            $mflag = 1;
+                                            last;
+                                        }
+                                    }
+                                    if ($mflag == 1){
+                                        $ident = 75;
+                                        $cov = 75;
+                                        $match = 3;
+                                    }
+                                }
+                            }
+                            else{
+                                ($ident, $cov, $match) = &multalin_ins1 ($insseq, $motif, $chr);
+                            }
                             if (($ident >= $min_str_identity) and ($match >= $ins_len * $min_str_len_rate)){
                                 $match_len = $match;
                             }
@@ -1290,7 +1334,50 @@ while (my $line = <FILE>){
                             }
                             else{
                                 if ($motif_size2 >= $ins_len){
-                                    my ($ident, $cov, $match) = &multalin_ins1 ($insseq, $motif2, $chr);
+                                    my ($ident, $cov, $match) = (0, 0, 0);
+                                    if ($ins_len <= 5){
+                                        my $motifR2 = $motif2 . $motif2;
+                                        if ($motifR2 =~ /$insseq/){
+                                            $ident = 100;
+                                            $cov = 100;
+                                            $match = 5;
+                                        }
+                                        elsif (($min_str_identity >= 80) and ($ins_len == 5)){
+                                            my $mflag = 0;
+                                            for (my $i = 0; $i <= 4; $i++){
+                                                my $minsseq = $insseq;
+                                                substr ($minsseq, $i, 1, '[ACGT]');
+                                                if ($motifR2 =~ /$minsseq/){
+                                                    $mflag = 1;
+                                                    last;
+                                                }
+                                            }
+                                            if ($mflag == 1){
+                                                $ident = 80;
+                                                $cov = 80;
+                                                $match = 4;
+                                            }
+                                        }
+                                        elsif (($min_str_identity >= 75) and ($ins_len == 4)){
+                                            my $mflag = 0;
+                                            for (my $i = 0; $i <= 3; $i++){
+                                                my $minsseq = $insseq;
+                                                substr ($minsseq, $i, 1, '[ACGT]');
+                                                if ($motif2 =~ /$minsseq/){
+                                                    $mflag = 1;
+                                                    last;
+                                                }
+                                            }
+                                            if ($mflag == 1){
+                                                $ident = 75;
+                                                $cov = 75;
+                                                $match = 3;
+                                            }
+                                        }
+                                    }
+                                    else{
+                                        ($ident, $cov, $match) = &multalin_ins1 ($insseq, $motif2, $chr);
+                                    }
                                     if (($ident >= $min_str_identity) and ($match >= $ins_len * $min_str_len_rate)){
                                         $match_len2 = $match;
                                     }
@@ -1324,6 +1411,7 @@ while (my $line = <FILE>){
                         else{
                             $hit_strid = $strid;
                             $ins_cn = int ($sum_ins_match_len / $motif_size * 10 + 0.5) / 10;
+                            $ins_cn = int ($sum_ins_match_len / $motif_size * 100 + 0.5) / 100 if ($ins_cn == 0);
                             if ($ins_cn < $min_str_cn){
                                 $match_flag = 0;
                             }
@@ -1342,6 +1430,7 @@ while (my $line = <FILE>){
                         else{
                             $hit_strid = $strid2;
                             $ins_cn = int ($sum_ins_match_len2 / length ($motif2) * 10 + 0.5) / 10;
+                            $ins_cn = int ($sum_ins_match_len2 / length ($motif2) * 100 + 0.5) / 100if ($ins_cn == 0);
                             if ($ins_cn < $min_str_cn){
                                 $match_flag = 0;
                             }
