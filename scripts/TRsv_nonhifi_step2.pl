@@ -1116,7 +1116,8 @@ while (my $line = <FILE>){
         my $str_line = '';
         if ($type =~ /TR-del/){
             my $del_cn = int ($len / $motif_size * 10 + 0.5) / 10;
-            if (($del_cn < $min_str_cn) and ($len < $min_indel_size)){
+            $del_cn = int ($len / $motif_size * 100 + 0.5) / 100 if ($del_cn == 0);
+            if (($del_cn < $min_str_cn) and ($len < $min_str_indel_size)){
                 next;
             }
         }
