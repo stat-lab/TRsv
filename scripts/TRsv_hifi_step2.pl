@@ -1203,7 +1203,7 @@ while (my $line = <FILE>){
                                     $cov = 100;
                                     $match = 5;
                                 }
-                                elsif (($min_str_identity >= 80) and ($ins_len == 5)){
+                                elsif (($min_str_identity <= 80) and ($ins_len == 5)){
                                     my $mflag = 0;
                                     for (my $i = 0; $i <= 4; $i++){
                                         my $minsseq = $insseq;
@@ -1219,7 +1219,7 @@ while (my $line = <FILE>){
                                         $match = 4;
                                     }
                                 }
-                                elsif (($min_str_identity >= 75) and ($ins_len == 4)){
+                                elsif (($min_str_identity <= 75) and ($ins_len == 4)){
                                     my $mflag = 0;
                                     for (my $i = 0; $i <= 3; $i++){
                                         my $minsseq = $insseq;
@@ -1343,7 +1343,7 @@ while (my $line = <FILE>){
                                             $cov = 100;
                                             $match = 5;
                                         }
-                                        elsif (($min_str_identity >= 80) and ($ins_len == 5)){
+                                        elsif (($min_str_identity <= 80) and ($ins_len == 5)){
                                             my $mflag = 0;
                                             for (my $i = 0; $i <= 4; $i++){
                                                 my $minsseq = $insseq;
@@ -1359,7 +1359,7 @@ while (my $line = <FILE>){
                                                 $match = 4;
                                             }
                                         }
-                                        elsif (($min_str_identity >= 75) and ($ins_len == 4)){
+                                        elsif (($min_str_identity <= 75) and ($ins_len == 4)){
                                             my $mflag = 0;
                                             for (my $i = 0; $i <= 3; $i++){
                                                 my $minsseq = $insseq;
