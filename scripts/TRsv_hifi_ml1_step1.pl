@@ -30,10 +30,7 @@ my $min_str_reads = 3;
 my $min_VRR = 0.05;
 my $min_str_vrr = 0.15;
 
-my $str_max_len_rate = 1.1;
-my $str_max_len_rate2 = 1.5;
-
-my $str_min_rate_len = 30;
+my $str_max_len_rate = 1.5;
 
 my $max_depth_fold = 15;
 
@@ -187,10 +184,7 @@ if ($max_dist2 > $min_str_indel_size){
     $max_dist2 = $min_str_indel_size - 1 if ($min_str_indel_size < 5);
 }
 
-$str_max_len_rate2 = $str_max_len_rate if ($str_max_len_rate2 < $str_max_len_rate);
-
 my $str_min_len_rate = int (1 / $str_max_len_rate * 100 + 0.5) / 100;
-my $str_min_len_rate2 = int (1 / $str_max_len_rate2 * 100 + 0.5) / 100;
 
 my $temp_dir = "$out_prefix.temp";
 system ("mkdir $temp_dir") if (!-d $temp_dir);
@@ -2111,19 +2105,10 @@ foreach my $sid (keys %bam_str){        # assign the sizes and counts (genotype)
                         $med_lenI2 = $temp_len;
                         $var_numI1 = $var_numI2;
                         $var_numI2 = $temp_num;
-                        if (($med_lenI1 < $str_min_rate_len) or ($med_lenI2 < $str_min_rate_len)){
-                            if (($med_lenI1 / $med_lenI2 >= $str_min_len_rate2) and ($med_lenI1 / $med_lenI2 <= $str_max_len_rate2)){
-                                $var_numI1 += $var_numI2;
-                                $var_numI2 = 0;
-                                $med_lenI2 = 0;
-                            }
-                        }
-                        else{
-                            if (($med_lenI1 / $med_lenI2 >= $str_min_len_rate) and ($med_lenI1 / $med_lenI2 <= $str_max_len_rate)){
-                                $var_numI1 += $var_numI2;
-                                $var_numI2 = 0;
-                                $med_lenI2 = 0;
-                            }
+                        if (($med_lenI1 / $med_lenI2 >= $str_min_len_rate) and ($med_lenI1 / $med_lenI2 <= $str_max_len_rate)){
+                            $var_numI1 += $var_numI2;
+                            $var_numI2 = 0;
+                            $med_lenI2 = 0;
                         }
                     }
                 }
@@ -2211,21 +2196,11 @@ foreach my $sid (keys %bam_str){        # assign the sizes and counts (genotype)
                 $var_num2 = $var_numI2;
                 $type1 = 'INS';
                 $type2 = 'INS';
-                if (($med_len1 >= $str_min_rate_len) and ($med_len2 >= $str_min_rate_len)){
-                    if (($med_len1 / $med_len2 >= $str_min_len_rate2) and ($med_len1 / $med_len2 <= $str_max_len_rate2)){
-                        $var_num1 += $var_num2;
-                        $var_num2 = $var_numD1;
-                        $med_len2 = $med_lenD1;
-                        $type2 = 'DEL';
-                    }
-                }
-                else{
-                    if (($med_len1 / $med_len2 >= $str_min_len_rate) and ($med_len1 / $med_len2 <= $str_max_len_rate)){
-                        $var_num1 += $var_num2;
-                        $var_num2 = $var_numD1;
-                        $med_len2 = $med_lenD1;
-                        $type2 = 'DEL';
-                    }
+                if (($med_len1 / $med_len2 >= $str_min_len_rate) and ($med_len1 / $med_len2 <= $str_max_len_rate)){
+                    $var_num1 += $var_num2;
+                    $var_num2 = $var_numD1;
+                    $med_len2 = $med_lenD1;
+                    $type2 = 'DEL';
                 }
             }
             else{
@@ -2308,19 +2283,10 @@ foreach my $sid (keys %bam_str){        # assign the sizes and counts (genotype)
                             $var_num1 = $sum_bp;
                             $med_len2 = $temp_len;
                             $var_num2 = $temp_num;
-                            if (($med_len1 < $str_min_rate_len) or ($med_len2 < $str_min_rate_len)){
-                                if (($med_len1 / $med_len2 >= $str_min_len_rate2) and ($med_len1 / $med_len2 <= $str_max_len_rate2)){
-                                    $var_num1 += $var_num2;
-                                    $var_num2 = 0;
-                                    $med_len2 = 0;
-                                }
-                            }
-                            else{
-                                if (($med_len1 / $med_len2 >= $str_min_len_rate) and ($med_len1 / $med_len2 <= $str_max_len_rate)){
-                                    $var_num1 += $var_num2;
-                                    $var_num2 = 0;
-                                    $med_len2 = 0;
-                                }
+                            if (($med_len1 / $med_len2 >= $str_min_len_rate) and ($med_len1 / $med_len2 <= $str_max_len_rate)){
+                                $var_num1 += $var_num2;
+                                $var_num2 = 0;
+                                $med_len2 = 0;
                             }
                         }
                     }
@@ -2789,7 +2755,7 @@ foreach my $bin (sort {$a <=> $b} keys %bam_ins){       # devide or delete highl
                     ${$pos2_ids{$id}}{$pos2} = $ilen;
                 }
             }
-            if ($end_bin > $start_bin){
+            if (($end_bin > $start_bin) and (exists $bam_ins{$end_bin})){
                 foreach my $pos2 (sort {$a <=> $b} keys %{$bam_ins{$end_bin}}){
                     last if ($pos2 > $pos + $mergin);
                     next if ($pos2 < $pos - $mergin);
@@ -3443,7 +3409,7 @@ foreach my $bin (sort {$a <=> $b} keys %bam_del){
             }
         }
         %merge = ();
-        if ($bin2 > $bin){
+        if (($bin2 > $bin) and (exists $bam_del{$bin2})){
             foreach my $pos2 (sort {$a <=> $b} keys %{$bam_del{$bin2}}){
                 last if ($pos2 > $pos1 + $ins_bp_diff);
                 next if ($pos2 <= $pos1);
@@ -3599,7 +3565,7 @@ foreach my $bin (sort {$a <=> $b} keys %bam_del){   # merge clustered dels for e
                 $overlap = $len2 if ($end2 < $end);
                 if (($overlap >= $len * $min_overlap_rate2) and ($overlap >= $len2 * $min_overlap_rate2)){
                     if (!exists $clust_del{$pos}){
-                        push @{$clust_del{$pos}}, @{${$bam_del{$bin}}{$pos}};
+                        push @{$clust_del{$pos}}, @{${$bam_del{$bin}}{$pos}} if (exists ${$bam_del{$bin}}{$pos});
                         push @{$clust_del{$pos}}, @{${$bam_del{$bin}}{$pos2}};
                         $used_del{$pos} = 1;
                         $used_del{$pos2} = 1;
@@ -3611,7 +3577,7 @@ foreach my $bin (sort {$a <=> $b} keys %bam_del){   # merge clustered dels for e
                 }
             }
         }
-        if ($bin2 > $bin){
+        if (($bin2 > $bin) and (exists $bam_del{$bin2})){
             foreach my $pos2 (sort {$a <=> $b} keys %{$bam_del{$bin2}}){
                 next if (exists $used_del{$pos2});
                 last if ($pos2 >= $end);
@@ -3629,7 +3595,7 @@ foreach my $bin (sort {$a <=> $b} keys %bam_del){   # merge clustered dels for e
                     $overlap = $len2 if ($end2 < $end);
                     if (($overlap >= $len * $min_overlap_rate2) and ($overlap >= $len2 * $min_overlap_rate2)){
                         if (!exists $clust_del{$pos}){
-                            push @{$clust_del{$pos}}, @{${$bam_del{$bin2}}{$pos}};
+                            push @{$clust_del{$pos}}, @{${$bam_del{$bin2}}{$pos}} if (exists ${$bam_del{$bin2}}{$pos});
                             push @{$clust_del{$pos}}, @{${$bam_del{$bin2}}{$pos2}};
                             $used_del{$pos} = 1;
                             $used_del{$pos2} = 1;
@@ -3707,7 +3673,7 @@ foreach my $bin (sort {$a <=> $b} keys %bam_del){   # merge clustered dels for e
                 $overlap = $len2 if ($end2 < $end);
                 if (($overlap >= $len * $min_overlap_rate) and ($overlap >= $len2 * $min_overlap_rate)){
                     if (!exists $clust_del2{$pos}){
-                        push @{$clust_del2{$pos}}, @{${$bam_del{$bin}}{$pos}};
+                        push @{$clust_del2{$pos}}, @{${$bam_del{$bin}}{$pos}} if (exists ${$bam_del{$bin}}{$pos});
                         push @{$clust_del2{$pos}}, @{${$bam_del{$bin}}{$pos2}};
                         $used_del2{$pos} = 1;
                         $used_del2{$pos2} = 1;
@@ -3719,7 +3685,7 @@ foreach my $bin (sort {$a <=> $b} keys %bam_del){   # merge clustered dels for e
                 }
             }
         }
-        if ($bin2 > $bin){
+        if (($bin2 > $bin) and (exists $bam_del{$bin2})){
             foreach my $pos2 (sort {$a <=> $b} keys %{$bam_del{$bin2}}){
                 next if (exists $used_del2{$pos2});
                 last if ($pos2 >= $end);
@@ -3737,7 +3703,7 @@ foreach my $bin (sort {$a <=> $b} keys %bam_del){   # merge clustered dels for e
                     $overlap = $len2 if ($end2 < $end);
                     if (($overlap >= $len * $min_overlap_rate) and ($overlap >= $len2 * $min_overlap_rate)){
                         if (!exists $clust_del2{$pos}){
-                            push @{$clust_del2{$pos}}, @{${$bam_del{$bin2}}{$pos}};
+                            push @{$clust_del2{$pos}}, @{${$bam_del{$bin2}}{$pos}} if (exists ${$bam_del{$bin2}}{$pos});
                             push @{$clust_del2{$pos}}, @{${$bam_del{$bin2}}{$pos2}};
                             $used_del2{$pos} = 1;
                             $used_del2{$pos2} = 1;
@@ -3811,7 +3777,7 @@ foreach my $bin (sort {$a <=> $b} keys %bam_del){   # merge clustered dels for e
                 my $len_rate = int ($len / $len2 * 100 + 0.5) / 100;
                 if (($len_rate <= 1.1) and ($len_rate >= 0.9)){
                     if (!exists $clust_del2{$pos}){
-                        push @{$clust_del2{$pos}}, @{${$bam_del{$bin}}{$pos}};
+                        push @{$clust_del2{$pos}}, @{${$bam_del{$bin}}{$pos}} if (exists ${$bam_del{$bin}}{$pos});
                         push @{$clust_del2{$pos}}, @{${$bam_del{$bin}}{$pos2}};
                         $used_del2{$pos} = 1;
                         $used_del2{$pos2} = 1;
@@ -3823,7 +3789,7 @@ foreach my $bin (sort {$a <=> $b} keys %bam_del){   # merge clustered dels for e
                 }
             }
         }
-        if ($bin2 > $bin){
+        if (($bin2 > $bin) and (exists $bam_del{$bin2})){
             foreach my $pos2 (sort {$a <=> $b} keys %{$bam_del{$bin2}}){
                 next if (exists $used_del2{$pos2});
                 last if ($pos2 >= $end);
@@ -3840,7 +3806,7 @@ foreach my $bin (sort {$a <=> $b} keys %bam_del){   # merge clustered dels for e
                     my $len_rate = int ($len / $len2 * 100 + 0.5) / 100;
                     if (($len_rate <= 1.1) and ($len_rate >= 0.9)){
                         if (!exists $clust_del2{$pos}){
-                            push @{$clust_del2{$pos}}, @{${$bam_del{$bin2}}{$pos}};
+                            push @{$clust_del2{$pos}}, @{${$bam_del{$bin2}}{$pos}} if (exists ${$bam_del{$bin2}}{$pos});
                             push @{$clust_del2{$pos}}, @{${$bam_del{$bin2}}{$pos2}};
                             $used_del2{$pos} = 1;
                             $used_del2{$pos2} = 1;
@@ -5602,7 +5568,7 @@ foreach my $bp1 (sort {$a <=> $b} keys %bam_del_bp){        # remove BP-DELs ove
             last;
         }
     }
-    if ($bin3 > $bin2){
+    if (($bin3 > $bin2) and (exists $bam_del{$bin3})){
         foreach my $dpos (sort {$a <=> $b} keys %{$bam_del{$bin3}}){
             last if ($dpos > $bp1 + 20);
             next if ($dpos < $bp1 - 500);
@@ -6188,7 +6154,7 @@ foreach my $pos (sort {$a <=> $b} keys %ins_bp12){      # assign INS to INS-BP w
                 }
             }
         }
-        if ($Mbin2 > $Mbin1){
+        if (($Mbin2 > $Mbin1) and (exists $bam_ins{$Mbin2})){
             foreach my $ipos (sort {$a <=> $b} keys %{$bam_ins{$Mbin2}}){
                 last if ($ipos > $pos2 + 20);
                 next if ($ipos < $pos - 20);
@@ -6810,7 +6776,7 @@ foreach my $pos1 (sort {$a <=> $b} keys %bam_dup){              # assign INS wit
                     }
                 }
             }
-            if ($Mbin2 > $Mbin1){
+            if (($Mbin2 > $Mbin1) and (exists $bam_ins{$Mbin2})){
                 foreach my $ipos (sort {$a <=> $b} keys %{$bam_ins{$Mbin2}}){
                     last if ($ipos > $pos2 + 50);
                     next if ($ipos < $pos1 - 50);
@@ -7550,23 +7516,12 @@ sub clust_indel{
             my $num = scalar @{$clust{$clust_num}};
             my $hnum = int ($num * 0.5);
             my $med = ${$clust{$clust_num}}[$hnum];
-            if (($len < $str_min_rate_len) or ($med < $str_min_rate_len)){
-                if ($len / $med <= $str_max_len_rate2){
-                    push @{$clust{$clust_num}}, $len;
-                }
-                else{
-                    $clust_num ++;
-                    push @{$clust{$clust_num}}, $len;
-                }
+            if ($len / $med <= $str_max_len_rate){
+                push @{$clust{$clust_num}}, $len;
             }
             else{
-                if ($len / $med <= $str_max_len_rate){
-                    push @{$clust{$clust_num}}, $len;
-                }
-                else{
-                    $clust_num ++;
-                    push @{$clust{$clust_num}}, $len;
-                }
+                $clust_num ++;
+                push @{$clust{$clust_num}}, $len;
             }
         }
         else{
@@ -7620,23 +7575,12 @@ sub clust_indel{
             my $sec_hnum = int ($sec_num * 0.5);
             @{$clust{$sec_clust}} = sort {$a <=> $b} @{$clust{$sec_clust}};
             my $sec_med = ${$clust{$sec_clust}}[$sec_hnum];
-            if (($top_med < $str_min_rate_len) or ($sec_med < $str_min_rate_len)){
-                if (($top_med / $sec_med <= $str_max_len_rate2) and ($top_med / $sec_med >= $str_min_len_rate2)){
-                    push @{$clust{$top_clust}}, @{$clust{$sec_clust}};
-                    $top_num += $sec_num;
-                    delete $clust{$sec_clust};
-                    $sec_clust = 0;
-                    $sec_num = 0;
-                }
-            }
-            else{
-                if (($top_med / $sec_med <= $str_max_len_rate) and ($top_med / $sec_med >= $str_min_len_rate)){
-                    push @{$clust{$top_clust}}, @{$clust{$sec_clust}};
-                    $top_num += $sec_num;
-                    delete $clust{$sec_clust};
-                    $sec_clust = 0;
-                    $sec_num = 0;
-                }
+            if (($top_med / $sec_med <= $str_max_len_rate) and ($top_med / $sec_med >= $str_min_len_rate)){
+                push @{$clust{$top_clust}}, @{$clust{$sec_clust}};
+                $top_num += $sec_num;
+                delete $clust{$sec_clust};
+                $sec_clust = 0;
+                $sec_num = 0;
             }
         }
     }
@@ -7665,87 +7609,39 @@ sub clust_indel{
             }
             if ($pre_clust > 0){
                 if ((($pre_clust eq $top_clust) and ($next_clust eq $sec_clust) and (exists $clust{$next_clust})) or (($pre_clust eq $sec_clust) and ($next_clust eq $top_clust) and (exists $clust{$next_clust}))){
-                    if (($med < $str_min_rate_len) or ($pre_med < $str_min_rate_len) or ($next_med < $str_min_rate_len)){
-                        if (($med / $pre_med <= $str_max_len_rate2) and ($med / $pre_med >= $str_min_len_rate2) and ($next_med / $med <= $str_max_len_rate2) and ($next_med / $med >= $str_min_len_rate2)){
-                            if ($pre_num > $next_num){
-                                push @{$clust{$next_clust}}, @{$clust{$clust}};
-                                delete $clust{$clust};
-                                $pre_clust = 0;
-                                next;
-                            }
-                            else{
-                                push @{$clust{$pre_clust}}, @{$clust{$clust}};
-                                delete $clust{$clust};
-                                $pre_clust = 0;
-                                next;
-                            }
+                    if (($med / $pre_med <= $str_max_len_rate) and ($med / $pre_med >= $str_min_len_rate) and ($next_med / $med <= $str_max_len_rate) and ($next_med / $med >= $str_min_len_rate)){
+                        if ($pre_num > $next_num){
+                            push @{$clust{$next_clust}}, @{$clust{$clust}};
+                            delete $clust{$clust};
+                            $pre_clust = 0;
+                            next;
                         }
-                    }
-                    else{
-                        if (($med / $pre_med <= $str_max_len_rate) and ($med / $pre_med >= $str_min_len_rate) and ($next_med / $med <= $str_max_len_rate) and ($next_med / $med >= $str_min_len_rate)){
-                            if ($pre_num > $next_num){
-                                push @{$clust{$next_clust}}, @{$clust{$clust}};
-                                delete $clust{$clust};
-                                $pre_clust = 0;
-                                next;
-                            }
-                            else{
-                                push @{$clust{$pre_clust}}, @{$clust{$clust}};
-                                delete $clust{$clust};
-                                $pre_clust = 0;
-                                next;
-                            }
-                        }
-                    }
-                    if (($med < $str_min_rate_len) or ($pre_med < $str_min_rate_len)){
-                        if (($med / $pre_med <= $str_max_len_rate2) and ($med / $pre_med > $str_min_len_rate2)){
+                        else{
                             push @{$clust{$pre_clust}}, @{$clust{$clust}};
                             delete $clust{$clust};
                             $pre_clust = 0;
                             next;
                         }
                     }
-                    else{
-                        if (($med / $pre_med <= $str_max_len_rate) and ($med / $pre_med > $str_min_len_rate)){
-                            push @{$clust{$pre_clust}}, @{$clust{$clust}};
-                            delete $clust{$clust};
-                            $pre_clust = 0;
-                            next;
-                        }
+                    elsif (($med / $pre_med <= $str_max_len_rate) and ($med / $pre_med > $str_min_len_rate)){
+                        push @{$clust{$pre_clust}}, @{$clust{$clust}};
+                        delete $clust{$clust};
+                        $pre_clust = 0;
+                        next;
                     }
-                    if (($next_med < $str_min_rate_len) or ($med < $str_min_rate_len)){
-                        if (($next_med / $med <= $str_max_len_rate2) and ($next_med / $med > $str_min_len_rate2)){
-                            push @{$clust{$next_clust}}, @{$clust{$clust}};
-                            delete $clust{$clust};
-                            $pre_clust = 0;
-                            next;
-                        }
-                    }
-                    else{
-                        if (($next_med / $med <= $str_max_len_rate) and ($next_med / $med > $str_min_len_rate)){
-                            push @{$clust{$next_clust}}, @{$clust{$clust}};
-                            delete $clust{$clust};
-                            $pre_clust = 0;
-                            next;
-                        }
+                    elsif (($next_med / $med <= $str_max_len_rate) and ($next_med / $med > $str_min_len_rate)){
+                        push @{$clust{$next_clust}}, @{$clust{$clust}};
+                        delete $clust{$clust};
+                        $pre_clust = 0;
+                        next;
                     }
                 }
                 elsif ((($pre_clust eq $top_clust) and ($clust ne $sec_clust)) or (($pre_clust eq $sec_clust) and ($clust ne $top_clust))){
-                    if (($med < $str_min_rate_len) or ($pre_med < $str_min_rate_len)){
-                        if (($med / $pre_med <= $str_max_len_rate2) and ($med / $pre_med > $str_min_len_rate2)){
-                            push @{$clust{$pre_clust}}, @{$clust{$clust}};
-                            delete $clust{$clust};
-                            $pre_clust = 0;
-                            next;
-                        }
-                    }
-                    else{
-                        if (($med / $pre_med <= $str_max_len_rate) and ($med / $pre_med > $str_min_len_rate)){
-                            push @{$clust{$pre_clust}}, @{$clust{$clust}};
-                            delete $clust{$clust};
-                            $pre_clust = 0;
-                            next;
-                        }
+                    if (($med / $pre_med <= $str_max_len_rate) and ($med / $pre_med > $str_min_len_rate)){
+                        push @{$clust{$pre_clust}}, @{$clust{$clust}};
+                        delete $clust{$clust};
+                        $pre_clust = 0;
+                        next;
                     }
                 }
             }
@@ -7764,51 +7660,10 @@ sub clust_indel{
     $top_med = ${$clust{$top_clust}}[$top_hnum];
     @{$clust{$sec_clust}} = sort {$a <=> $b} @{$clust{$sec_clust}} if (exists $clust{$sec_clust});
     $sec_med = ${$clust{$sec_clust}}[$sec_hnum] if (exists $clust{$sec_clust});
-    my $SD_top_clust = 0;
-    my $SD_sec_clust = 0;
-    if (($sec_num >= $min_str_reads) and ($top_med >= $str_min_rate_len) and ($sec_med >= $str_min_rate_len) and ($str_max_len_rate < 1.5)){
-        my $sum_top_clust = 0;
-        my $sum_sec_clust = 0;
-        my $diff_top_clust = 0;
-        my $diff_sec_clust = 0;
-        map{$sum_top_clust += $_} @{$clust{$top_clust}};
-        my $ave_top_clust = int ($sum_top_clust / @{$clust{$top_clust}} + 0.5);
-        map{$diff_top_clust += ($ave_top_clust - $_) ** 2} @{$clust{$top_clust}};
-        $SD_top_clust = int (($diff_top_clust / @{$clust{$top_clust}}) ** 0.5 * 10 + 0.5) / 10;
-        map{$sum_sec_clust += $_} @{$clust{$sec_clust}};
-        my $ave_sec_clust = int ($sum_sec_clust / @{$clust{$sec_clust}} + 0.5);
-        map{$diff_sec_clust += ($ave_sec_clust - $_) ** 2} @{$clust{$sec_clust}};
-        $SD_sec_clust = int (($diff_sec_clust / @{$clust{$sec_clust}}) ** 0.5 * 10 + 0.5) / 10;
-        if ($top_med >= $sec_med){
-            my $top_min = $top_med - $SD_top_clust * 3;
-            my $sec_max = $sec_med + $SD_sec_clust * 3;
-            if ($top_min < $sec_max - 10){
-                $top_num += $sec_num;
-                $sec_num = 0;
-                $top_med = int ((($top_med * $top_num) + ($sec_med * $sec_num)) / ($top_num + $sec_num) + 0.5);
-            }
-        }
-        else{
-            my $top_max = $top_med + $SD_top_clust * 3;
-            my $sec_min = $sec_med - $SD_sec_clust * 3;
-            if ($sec_min < $top_max - 10){
-                $top_num += $sec_num;
-                $sec_num = 0;
-                $top_med = int ((($top_med * $top_num) + ($sec_med * $sec_num)) / ($top_num + $sec_num) + 0.5);
-            }
-        }
-    }
-    elsif ($sec_num < $min_str_reads){
-        my $lenrate = int ($sec_med / $top_med * 100 + 0.5) / 100;
-        if (($lenrate < $str_max_len_rate2) and ($lenrate > $str_min_len_rate2)){
-            $top_num += $sec_num;
-        }
-    }
-
     if ($sec_num >= $min_str_reads){
-        return ($top_med, $sec_med, $top_num, $sec_num, $SD_top_clust, $SD_sec_clust);
+        return ($top_med, $sec_med, $top_num, $sec_num);
     }
     else{
-        return ($top_med, 0, $top_num, 0, 0, 0);
+        return ($top_med, 0, $top_num, 0);
     }
 }
