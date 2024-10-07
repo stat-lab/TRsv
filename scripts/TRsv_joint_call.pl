@@ -252,13 +252,13 @@ foreach my $id (@sample_id){
 						my $v = $1;
 						$line[7] =~ s/VRR=[\d\.]+,[\d\.]+/VRR=$v/;
 					}
-					if (($type eq 'DEL') and ($line[7] =~ /CN=loss-([\d\.]+),loss-[\d\.]+/)){
+					if (($type eq 'DEL') and ($line[7] =~ /CN=loss\-([\d\.]+),loss\-[\d\.]+/)){
 						my $c = $1;
-						$line[7] =~ s/CN=loss-[\d\.]+,loss-[\d\.]+/CN=loss-$c/;
+						$line[7] =~ s/CN=loss\-[\d\.]+,loss\-[\d\.]+/CN=loss-$c/;
 					}
-					elsif (($type eq 'INS') and ($line[7] =~ /CN=gain+([\d\.]+),gain+[\d\.]+/)){
+					elsif (($type eq 'INS') and ($line[7] =~ /CN=gain\+([\d\.]+),gain\+[\d\.]+/)){
 						my $c = $1;
-						$line[7] =~ s/CN=gain+[\d\.]+,gain+[\d\.]+/CN=gain+$c/;
+						$line[7] =~ s/CN=gain\+[\d\.]+,gain\+[\d\.]+/CN=gain+$c/;
 					}
 				}
 				elsif (($len1 < $min_str_len) and ($len2 >= $min_str_len)){
@@ -271,14 +271,24 @@ foreach my $id (@sample_id){
 						my $v = $1;
 						$line[7] =~ s/VRR=[\d\.]+,[\d\.]+/VRR=$v/;
 					}
-					if (($type eq 'DEL') and ($line[7] =~ /CN=loss-[\d\.]+,loss-([\d\.]+)/)){
+					if (($type eq 'DEL') and ($line[7] =~ /CN=loss\-[\d\.]+,loss\-([\d\.]+)/)){
 						my $c = $1;
-						$line[7] =~ s/CN=loss-[\d\.]+,loss-[\d\.]+/CN=loss-$c/;
+						$line[7] =~ s/CN=loss\-[\d\.]+,loss\-[\d\.]+/CN=loss-$c/;
 					}
-					elsif (($type eq 'INS') and ($line[7] =~ /CN=gain+[\d\.]+,gain+([\d\.]+)/)){
+					elsif (($type eq 'INS') and ($line[7] =~ /CN=gain\+[\d\.]+,gain\+([\d\.]+)/)){
 						my $c = $1;
-						$line[7] =~ s/CN=gain+[\d\.]+,gain+[\d\.]+/CN=gain+$c/;
+						$line[7] =~ s/CN=gain\+[\d\.]+,gain\+[\d\.]+/CN=gain+$c/;
 					}
+				}
+				if (($type eq 'DEL') and ($line[7] =~ /CN=loss\-([\d\.]+),([\d\.]+)/)){
+					my $cn1 = $1;
+					my $cn2 = $2;
+					$line[7] =~ s/CN=loss\-[\d\.]+,[\d\.]+/CN=loss-$cn1,loss-$cn2/;
+				}
+				elsif (($type eq 'INS') and ($line[7] =~ /CN=gain\+([\d\.]+),([\d\.]+)/)){
+					my $cn1 = $1;
+					my $cn2 = $2;
+					$line[7] =~ s/CN=gain\+[\d\.]+,[\d\.]+/CN=gain+$cn1,gain+$cn2/;
 				}
 			}
 			elsif ($type eq 'DEL,INS'){
@@ -296,9 +306,9 @@ foreach my $id (@sample_id){
 						my $v = $1;
 						$line[7] =~ s/VRR=[\d\.]+,[\d\.]+/VRR=$v/;
 					}
-					if (($line[7] =~ /CN=loss-([\d\.]+),gain+[\d\.]+/)){
+					if (($line[7] =~ /CN=loss\-([\d\.]+),gain\+[\d\.]+/)){
 						my $c = $1;
-						$line[7] =~ s/CN=loss-[\d\.]+,gain+[\d\.]+/CN=loss-$c/;
+						$line[7] =~ s/CN=loss\-[\d\.]+,gain\+[\d\.]+/CN=loss-$c/;
 					}
 				}
 				elsif (($len1 < $min_str_len) and ($len2 >= $min_str_len)){
@@ -312,10 +322,16 @@ foreach my $id (@sample_id){
 						my $v = $1;
 						$line[7] =~ s/VRR=[\d\.]+,[\d\.]+/VRR=$v/;
 					}
-					if (($line[7] =~ /CN=loss-[\d\.]+,gain+([\d\.]+)/)){
+					if (($line[7] =~ /CN=loss\-[\d\.]+,gain\+([\d\.]+)/)){
 						my $c = $1;
-						$line[7] =~ s/CN=loss-[\d\.]+,gain+[\d\.]+/CN=gain+$c/;
+						$line[7] =~ s/CN=loss\-[\d\.]+,gain\+[\d\.]+/CN=gain+$c/;
 					}
+				}
+				if ($line[7] =~ /CN=loss\-([\d\.]+);/){
+					my $cn1 = $1;
+					my $strulen = $1 if ($line[7] =~ /TRULEN=(\d+)/);
+					my $cn2 = int ($len2 / $strulen * 10 + 0.5) / 10;
+					$line[7] =~ s/CN=loss\-[\d\.]+;/CN=loss-$cn1,gain+$cn2;/;
 				}
 			}
 			elsif ($type eq 'INS,DEL'){
@@ -333,9 +349,9 @@ foreach my $id (@sample_id){
 						my $v = $1;
 						$line[7] =~ s/VRR=[\d\.]+,[\d\.]+/VRR=$v/;
 					}
-					if (($line[7] =~ /CN=gain+([\d\.]+),loss-[\d\.]+/)){
+					if (($line[7] =~ /CN=gain\+([\d\.]+),loss\-[\d\.]+/)){
 						my $c = $1;
-						$line[7] =~ s/CN=gain+[\d\.]+,loss-[\d\.]+/CN=gain+$c/;
+						$line[7] =~ s/CN=gain\+[\d\.]+,loss\-[\d\.]+/CN=gain+$c/;
 					}
 				}
 				elsif (($len1 < $min_str_len) and ($len2 >= $min_str_len)){
@@ -349,10 +365,16 @@ foreach my $id (@sample_id){
 						my $v = $1;
 						$line[7] =~ s/VRR=[\d\.]+,[\d\.]+/VRR=$v/;
 					}
-					if (($line[7] =~ /CN=gain+[\d\.]+,loss-([\d\.]+)/)){
+					if (($line[7] =~ /CN=gain\+[\d\.]+,loss\-([\d\.]+)/)){
 						my $c = $1;
-						$line[7] =~ s/CN=gain+[\d\.]+,loss-[\d\.]+/CN=loss-$c/;
+						$line[7] =~ s/CN=gain\+[\d\.]+,loss\-[\d\.]+/CN=loss-$c/;
 					}
+				}
+				if ($line[7] =~ /CN=gain\+([\d\.]+);/){
+					my $cn1 = $1;
+					my $strulen = $1 if ($line[7] =~ /TRULEN=(\d+)/);
+					my $cn2 = int ($len2 / $strulen * 10 + 0.5) / 10;
+					$line[7] =~ s/CN=gain\+[\d\.]+;/CN=gain+$cn1,loss-$cn2;/;
 				}
 			}
 			$line = join ("\t", @line);
@@ -2993,6 +3015,10 @@ foreach my $chr (keys %cnv_line){
 				else{
 					if ($type eq 'DEL'){
 						if ($line[7] =~ /CN=loss\-([\d\.]+),loss\-([\d\.]+)/){
+							$cn{$id} = "-$1,-$2";
+							$len{$id} = "-$len1,-$len2";
+						}
+						elsif ($line[7] =~ /CN=loss\-([\d\.]+),([\d\.]+)/){
 							$cn{$id} = "-$1,-$2";
 							$len{$id} = "-$len1,-$len2";
 						}
