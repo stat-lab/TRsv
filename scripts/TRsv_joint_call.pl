@@ -285,6 +285,11 @@ foreach my $id (@sample_id){
 					my $cn2 = $2;
 					$line[7] =~ s/CN=loss\-[\d\.]+,[\d\.]+/CN=loss-$cn1,loss-$cn2/;
 				}
+				elsif (($type eq 'DEL') and ($line[7] =~ /CN=([\d\.]+),([\d\.]+)/)){
+					my $cn1 = $1;
+					my $cn2 = $2;
+					$line[7] =~ s/CN=loss\-[\d\.]+,[\d\.]+/CN=loss-$cn1,loss-$cn2/;
+				}
 				elsif (($type eq 'INS') and ($line[7] =~ /CN=gain\+([\d\.]+),([\d\.]+)/)){
 					my $cn1 = $1;
 					my $cn2 = $2;

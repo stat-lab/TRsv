@@ -1824,7 +1824,7 @@ foreach my $chr (sort keys %str_sv){            # merge and delete non-TR-INSs w
         $len1 = $1 if ($sline =~ /SVLEN=(\d+)/);
         $len2 = $1 if ($sline =~ /SVLEN=\d+,(\d+)/);
         $cn1 = $1 if ($sline =~ /CN=gain\+([\d\.]+)/) and ($stype1 eq 'INS');
-        $cn1 = $1 if ($sline =~ /CN=lossn-([\d\.]+)/) and ($stype1 eq 'DEL');
+        $cn1 = $1 if ($sline =~ /CN=loss\-([\d\.]+)/) and ($stype1 eq 'DEL');
         my $strulen = 0;
         $strulen = $1 if ($sline =~ /TRULEN=(\d+)/);
         my $maxlen = $len1;
@@ -1961,8 +1961,8 @@ foreach my $chr (sort keys %str_sv){            # merge and delete non-TR-INSs w
                         $sline =~ s/SVLEN=$len1,$len2/SVLEN=$strlen,$len1/;
                         $sline =~ s/VRR=$vrr1,$vrr2/VRR=1,$vrr1/;
                         $sline =~ s/READS=$read1,\d+/READS=$read2,$read1/;
-                        my $cn1 = $1 if ($sline =~ /CN=loss-([\d\.]+)/);
-                        $sline =~ s/CN=loss-[\d\.]+,gain\+[\d\.]+/CN=gain+$cn,loss-$cn1/;
+                        my $cn1 = $1 if ($sline =~ /CN=loss\-([\d\.]+)/);
+                        $sline =~ s/CN=loss\-[\d\.]+,gain\+[\d\.]+/CN=gain+$cn,loss-$cn1/;
                     }
                 }
                 elsif (($ilen > 0) and ($len2 / $ilen <= 1.5) and ($len2 / $ilen >= 0.65)){
@@ -1983,7 +1983,7 @@ foreach my $chr (sort keys %str_sv){            # merge and delete non-TR-INSs w
                         $sline =~ s/SVLEN=$len1/SVLEN=$ilen,$len1/;
                         $sline =~ s/VRR=$vrr1/VRR=1,$vrr1/;
                         $sline =~ s/READS=$read1/READS=$iread,$read1/;
-                        $sline =~ s/CN=loss-[\d\.]+/CN=gain+$cn,loss-$cn1/;
+                        $sline =~ s/CN=loss\-[\d\.]+/CN=gain+$cn,loss-$cn1/;
                         $sline =~ s/GT=H[TM]/GT=HT2/;
                     }
                 }
@@ -1993,14 +1993,14 @@ foreach my $chr (sort keys %str_sv){            # merge and delete non-TR-INSs w
                         $sline =~ s/SVLEN=$len1/SVLEN=$len1,$ilen/;
                         $sline =~ s/READS=\d+/READS=$read1,$iread/;
                         $sline =~ s/VRR=[\d\.]+/VRR=$vrr1,$ivrr/;
-                        $sline =~ s/CN=loss-[\d\.]+/CN=loss-$cn1,gain+$cn/;
+                        $sline =~ s/CN=loss\-[\d\.]+/CN=loss-$cn1,gain+$cn/;
                     }
                     else{
                         $sline =~ s/SVTYPE=$stype1/SVTYPE=INS,$stype1/;
                         $sline =~ s/SVLEN=$len1/SVLEN=$ilen,$len1/;
                         $sline =~ s/READS=\d+/READS=$iread,$read1/;
                         $sline =~ s/VRR=[\d\.]+/VRR=$ivrr,$vrr1/;
-                        $sline =~ s/CN=loss-[\d\.]+/CN=gain+$cn,loss-$cn1/;
+                        $sline =~ s/CN=loss\-[\d\.]+/CN=gain+$cn,loss-$cn1/;
                     }
                     $sline =~ s/GT=H[TM]/GT=HT2/;
                 }
@@ -2091,9 +2091,9 @@ foreach my $chr (keys %dup_sv){     # merge DUP overlapping TR with TR-CNV
                     $len1 = $1 if ($sline =~ /SVLEN=(\d+)/);
                     $len2 = $1 if ($sline =~ /SVLEN=\d+,(\d+)/);
                     $cn1 = $1 if ($sline =~ /CN=gain\+([\d\.]+)/) and ($stype1 eq 'INS');
-                    $cn1 = $1 if ($sline =~ /CN=loss-([\d\.]+)/) and ($stype1 eq 'DEL');
+                    $cn1 = $1 if ($sline =~ /CN=loss\-([\d\.]+)/) and ($stype1 eq 'DEL');
                     $cn2 = $1 if ($sline =~ /CN=gain\+[\d\.]+,gain\+([\d\.]+)/) and ($stype1 eq 'INS') and ($len2 > 0);
-                    $cn2 = $1 if ($sline =~ /CN=loss-[\d\.]+,gain\+([\d\.]+)/) and ($stype1 eq 'DEL') and ($stype2 eq 'INS');
+                    $cn2 = $1 if ($sline =~ /CN=loss\-[\d\.]+,gain\+([\d\.]+)/) and ($stype1 eq 'DEL') and ($stype2 eq 'INS');
                     $gt1 = $1 if ($sline =~ /GT=(.+?);/);
                     my $flag2 = 0;
                     if ($stype1 eq 'INS'){
@@ -2120,7 +2120,7 @@ foreach my $chr (keys %dup_sv){     # merge DUP overlapping TR with TR-CNV
                                 $sline =~ s/READS=\d+,\d+/READS=$read2,$read1/;
                                 $sline =~ s/VRR=[\d\.]+,[\d\.]+/VRR=$vrr2,$vrr1/;
                                 $sline =~ s/SVLEN=\d+,\d+/SVLEN=$len2,$len1/;
-                                $sline =~ s/CN=loss-[\d\.]+,gain\+[\d\.]+/CN=gain\+$cn2,loss-$cn1/;
+                                $sline =~ s/CN=loss\-[\d\.]+,gain\+[\d\.]+/CN=gain\+$cn2,loss-$cn1/;
                                 ${${$sv2{$chr}}{$spos}}{'TR'} = $sline;
                             }
                             else{
@@ -2184,7 +2184,7 @@ foreach my $chr (sort keys %str_sv){            # remove TR-CNV with < min_tr_vr
                 my $read1 = $1 if ($sline =~ /READS=(\d+)/);
                 my $cn1 = 0;
                 $cn1 = $1 if ($sline =~ /CN=gain\+([\d\.]+)/) and ($type1 eq 'INS');
-                $cn1 = $1 if ($sline =~ /CN=loss-([\d\.]+)/) and ($type1 eq 'DEL');
+                $cn1 = $1 if ($sline =~ /CN=loss\-([\d\.]+)/) and ($type1 eq 'DEL');
                 if ($cn1 == 0){
                     my $ulen = $1 if ($sline =~ /TRULEN=(\d+)/);
                     $cn1 = int ($len1 / $ulen * 10 + 0.5) / 10;
@@ -2698,7 +2698,7 @@ foreach my $chr (sort keys %sv2){   # add TR-DEL located within large DELs and D
                                     my $lenrate2 = int ($len / $str_len * 100 + 0.5) / 100;
                                     if (($lenrate2 >= 0.9) and ($lenrate2 <= 1.1)){
                                         $str_line[7] =~ s/SVLEN=$str_len/SVLEN=$del_len/;
-                                        $str_line[7] =~ s/CN=$str_cn/CN=$del_cn/;
+                                        $str_line[7] =~ s/CN=$str_cn/CN=loss-$del_cn/;
                                         $str_line = join ("\t", @str_line);
                                         $str_line .= ";OVLSV=$pos-$type-$len";
                                         ${${$sv2{$chr}}{$rpos}}{'TR'} = $str_line;
@@ -2706,7 +2706,7 @@ foreach my $chr (sort keys %sv2){   # add TR-DEL located within large DELs and D
                                     }
                                     elsif (($lenrate >= 2) and ($str_gt eq 'HT')){
                                         $str_line[7] =~ s/SVLEN=$str_len/SVLEN=$str_len,$del_len/;
-                                        $str_line[7] =~ s/CN=$str_cn/CN=$str_cn,$del_cn/;
+                                        $str_line[7] =~ s/CN=$str_cn/CN=$str_cn,loss-$del_cn/;
                                         $str_line[7] =~ s/VRR=$str_vrr/VRR=$str_vrr,$vrr/;
                                         $str_line[7] =~ s/READS=$str_read/READS=$str_read,$read/;
                                         $str_line[7] =~ s/GT=HT/GT=HT2/;
@@ -2761,7 +2761,7 @@ foreach my $chr (sort keys %sv2){   # add TR-DEL located within large DELs and D
                                         my $lenrate = int ($ins_len / $str_len * 100 + 0.5) / 100;
                                         if ($lenrate >= 2){
                                             $str_line[7] =~ s/SVLEN=$str_len/SVLEN=$str_len,$ins_len/;
-                                            $str_line[7] =~ s/CN=$str_cn/CN=$str_cn,$ins_cn/;
+                                            $str_line[7] =~ s/CN=$str_cn/CN=$str_cn,gain+$ins_cn/;
                                             $str_line[7] =~ s/VRR=$str_vrr/VRR=$str_vrr,$vrr/;
                                             $str_line[7] =~ s/READS=$str_read/READS=$str_read,$read/;
                                             $str_line[7] =~ s/GT=HT/GT=HT2/;
