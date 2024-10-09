@@ -134,6 +134,8 @@ TRsv joint_call -v <input_vcf_list> -p <output_prefix> -od <output_directory> -n
   The reference_fasta_index is an index file of the reference fasta used, which can be generated with the samtools faidx command.
   The gap_bed is a bed file describing tab-separated gap regions (chr start end) in each line.  
 
+For large data sets with a large number of samples and/or variants, running the command for each chromosome using the -c option should shorten the run time.
+
 #### Output file
 
 ${output_prefix}.All-samples.vcf
