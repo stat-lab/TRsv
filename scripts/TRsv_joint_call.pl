@@ -214,6 +214,7 @@ my %used_pos;
 my %call_ave_len;
 my %call_diverged;
 my %call_diverged_ave;
+my %call_samples;
 my %ins_bp;
 my %ins_bp_line;
 my $count = 0;
@@ -397,9 +398,17 @@ foreach my $id (@sample_id){
 			${${$ins_bp{$chr}}{$pos}}{$id} = $bp_distance if ($len == 0) and ($type eq 'INS');
 			${${$ins_bp_line{$chr}}{$pos}}{$id} = "$line[4]==$line[7]~$line[6]" if ($len == 0) and ($type eq 'INS');
 		}
+		$call_samples{$id} ++;
     }
     close (FILE);
 }
+
+my $sum_calls = 0;
+my $ave_call = 0;
+foreach my $id (keys %call_samples){
+	$sum_calls += $call_samples{$id};
+}
+$ave_call = int ($sum_calls / $count);
 
 foreach my $type (keys %call){			# clustering DEL/DUP/INV exhibiting > 2-fold larger or smaller size of the averaged length at the same called positions
     foreach my $chr (keys %{$call{$type}}){
@@ -1740,127 +1749,264 @@ foreach my $type (keys %vcf_type){              # adjust sample variants between
     }
 }
 
-foreach my $type (keys %vcf_type){                  # merge overlapping variants
-    foreach my $chr (keys %{$vcf_type{$type}}){
-        my $chr2 = $chr;
-        $chr2 =~ s/^0*//;
-        my %removed;
-        foreach my $pos1 (sort {$a <=> $b} keys %{${$vcf_type{$type}}{$chr}}){
-        	next if (exists $removed{$pos1});
-            my $line1 = ${${$vcf_type{$type}}{$chr}}{$pos1};
-            my $len1 = $1 if ($line1 =~ /SVLEN2=-*(\d+)/);
-            my $end1 = $pos1 + $len1 - 1;
-            $end1 = $pos1 if ($type eq 'INS');
-            my $idpos1 = $1 if ($line1 =~ /SAMPLES=(.+)/);
-            my @idpos1 = split (/,,/, $idpos1);
-            my $sn1 = scalar @idpos1;
-            foreach my $pos2 (sort {$a <=> $b} keys %{${$vcf_type{$type}}{$chr}}){
-            	next if ($pos2 <= $pos1);
-            	next if (exists $removed{$pos2});
-            	last if ($pos2 > $end1 + 1000);
-	            my $line2 = ${${$vcf_type{$type}}{$chr}}{$pos2};
-	            my $len2 = $1 if ($line2 =~ /SVLEN2=-*(\d+)/);
-	            next if ($len2 == 0);
-	            my $end2 = $pos2 + $len2 - 1;
-	            $end2 = $pos2 if ($type eq 'INS');
-	            my $idpos2 = $1 if ($line2 =~ /SAMPLES=(.+)/);
-	            my @idpos2 = split (/,,/, $idpos2);
-            	my $sn2 = scalar @idpos2;
-	            my $distance = $pos2 - $end1;
-	            if ($type eq 'INS'){
-	            	my %ids;
-                    my $new_sn = 0;
-                    my $new_idpos = '';
-                    my $new_pos = 0;
-                    my $new_len = 0;
-                    my @len;
-                    my $flag = 0;
-                    my $ovl_flag = 0;
-                    if (($distance <= 150) and ($len1 * 0.5 >= $distance) and ($len2 * 0.5 >= $distance) and ($len1 / $len2 > 0.556) and ($len1 / $len2 < 1.8)){
-                    	$ovl_flag = 1;
-                    }
-                    elsif (($distance <= 300) and ($len1 >= $distance) and ($len2 >= $distance) and ($len1 / $len2 >= 0.8) and ($len1 / $len2 <= 1.25)){
-                    	$ovl_flag = 1;
-                    }
-                    elsif (($distance <= 1000) and ($len1 >= $distance) and ($len2 >= $distance) and ($len1 / $len2 >= 0.95) and ($len1 / $len2 <= 1.05)){
-                    	$ovl_flag = 1;
-                    }
-                    elsif (($distance <= 10) and ($len1 <= 10) and ($len1 > 3) and ($len2 <= 10) and ($len2 > 3) and ($len1 / $len2 >= 0.5) and ($len1 / $len2 <= 2)){
-                    	$ovl_flag = 1;
-                    }
-                    elsif (($distance <= 2) and ($len1 <= 3) and ($len2 <= 3) and ($len1 / $len2 >= 0.5) and ($len1 / $len2 <= 2)){
-                    	$ovl_flag = 1;
-                    }
-                    if ($ovl_flag == 1){
-                        if ($sn2 >= $sn1){
-                            foreach (@idpos1){
-	                            my ($id, $spos) = split (/==/, $_);
-	                            ${$ids{$id}}{$spos} = $_;
-	                        }
-	                        foreach (@idpos2){
-	                            my ($id, $spos) = split (/==/, $_);
-	                            ${$ids{$id}}{$spos} = $_;
-	                        }
-	                        $new_pos = $pos2;
-	                        delete ${${$vcf_type{$type}}{$chr}}{$pos1};
-	                        $removed{$pos1} = 1;
-	                        $flag = 2;
-                        }
-                        else{
-                            foreach (@idpos2){
-	                            my ($id, $spos) = split (/==/, $_);
-	                            ${$ids{$id}}{$spos} = $_;
-	                        }
-	                        foreach (@idpos1){
-	                            my ($id, $spos) = split (/==/, $_);
-	                            ${$ids{$id}}{$spos} = $_;
-	                        }
-	                        $new_pos = $pos1;
-	                        delete ${${$vcf_type{$type}}{$chr}}{$pos2};
-	                        $removed{$pos2} = 1;
-	                        $flag = 1;
-                        }
-                    }
-                    if ($flag >= 1){
-	                    foreach my $gid (sort keys %ids){
-	                    	foreach my $spos (sort {$a <=> $b} keys %{$ids{$gid}}){
-		                        my ($gid2, $spos2, $len2) = split (/==/, ${$ids{$gid}}{$spos});
-		                        $new_idpos .= "${$ids{$gid}}{$spos},,";
-		                        push @len, $len2;
-		                    }
-	                    }
-	                    my $hnum = int (@len * 0.5);
-	                    $new_len = $len[$hnum];
-	                    $new_idpos =~ s/,,$//;
-	                    ${${$vcf_type{$type}}{$chr}}{$new_pos} = "SVLEN2=$new_len;SAMPLES=$new_idpos";
-	                    delete $removed{$new_pos} if (exists $removed{$new_pos});
-	                    last if ($flag == 2);
-                    }
+if (($ave_call > 100000) or ($total_sample_num >= 1000)){     # merge overlapping variants
+	my %vcf_type2;
+	my $Mbin_size = 1000000;
+	foreach my $type (keys %vcf_type){
+	    foreach my $chr (keys %{$vcf_type{$type}}){
+	    	foreach my $pos (sort {$a <=> $b} keys %{${$vcf_type{$type}}{$chr}}){
+	    		my $Mbin1 = int ($pos / $Mbin_size);
+	    		my $line = ${${$vcf_type{$type}}{$chr}}{$pos};
+	            my $len = $1 if ($line =~ /SVLEN2=-*(\d+)/);
+	            my $end = $pos + $len - 1;
+	            my $Mbin2 = int ($end / $Mbin_size);
+	            ${${${$vcf_type2{$type}}{$chr}}{$Mbin1}}{$pos} = $line;
+	            if ($Mbin2 > $Mbin1){
+	            	${${${$vcf_type2{$type}}{$chr}}{$Mbin2}}{$pos} = $line;
 	            }
-	            else{
-	            	if ($distance <= 5){
-                        my $overlap = $end1 - $pos2 + 1;
-                        $overlap = $len2 if ($end2 < $end1);
-                        my $ovl_flag = 0;
-                        if (($overlap >= $len1 * $min_overlap_ratio) and ($overlap >= $len2 * $min_overlap_ratio)){
-                        	$ovl_flag = 1;
-                        }
-                        elsif (($overlap > 0) and ($len1 <= 10) and ($len2 <= 10) and ($len1 / $len2 <= 2) and ($len1 / $len2 >= 0.5)){
-                        	$ovl_flag = 1;
-                        }
-                        elsif (($len1 <= 5) and ($len2 <= 5) and ($len1 / $len2 <= 2) and ($len1 / $len2 >= 0.5)){
-                        	$ovl_flag = 1;
-                        }
-                        if ($ovl_flag == 1){
-                        	my %ids;
+	        }
+	    }
+	}
+	%vcf_type = ();
+	foreach my $type (keys %vcf_type2){                  # merge overlapping variants
+	    foreach my $chr (keys %{$vcf_type2{$type}}){
+	        my $chr2 = $chr;
+	        $chr2 =~ s/^0*//;
+	        my %removed;
+	        foreach my $bin1 (sort {$a <=> $b} keys %{${$vcf_type2{$type}}{$chr}}){
+		        foreach my $pos1 (sort {$a <=> $b} keys %{${${$vcf_type2{$type}}{$chr}}{$bin1}}){
+		        	next if (exists $removed{$pos1});
+		            my $line1 = ${${${$vcf_type2{$type}}{$chr}}{$bin1}}{$pos1};
+		            my $len1 = $1 if ($line1 =~ /SVLEN2=-*(\d+)/);
+		            my $end1 = $pos1 + $len1 - 1;
+		            $end1 = $pos1 if ($type eq 'INS');
+		            my $idpos1 = $1 if ($line1 =~ /SAMPLES=(.+)/);
+		            my @idpos1 = split (/,,/, $idpos1);
+		            my $sn1 = scalar @idpos1;
+		            foreach my $pos2 (sort {$a <=> $b} keys %{${${$vcf_type2{$type}}{$chr}}{$bin1}}){
+		            	next if ($pos2 <= $pos1);
+		            	next if (exists $removed{$pos2});
+		            	last if ($pos2 > $end1 + 1000);
+			            my $line2 = ${${${$vcf_type2{$type}}{$chr}}{$bin1}}{$pos2};
+			            my $len2 = $1 if ($line2 =~ /SVLEN2=-*(\d+)/);
+			            next if ($len2 == 0);
+			            my $lenrate = int ($len1 / $len2 * 100 + 0.5) / 100;
+			            next if ($lenrate > 2) or ($lenrate < 0.5);
+			            my $end2 = $pos2 + $len2 - 1;
+			            $end2 = $pos2 if ($type eq 'INS');
+			            my $idpos2 = $1 if ($line2 =~ /SAMPLES=(.+)/);
+			            my @idpos2 = split (/,,/, $idpos2);
+		            	my $sn2 = scalar @idpos2;
+			            my $distance = $pos2 - $end1;
+			            if ($type eq 'INS'){
+			            	my %ids;
 		                    my $new_sn = 0;
 		                    my $new_idpos = '';
 		                    my $new_pos = 0;
 		                    my $new_len = 0;
 		                    my @len;
 		                    my $flag = 0;
-		                    if ($sn2 >= $sn1){
-		                        foreach (@idpos1){
+		                    my $ovl_flag = 0;
+		                    if (($distance <= 150) and ($len1 * 0.5 >= $distance) and ($len2 * 0.5 >= $distance) and ($lenrate > 0.556) and ($lenrate < 1.8)){
+		                    	$ovl_flag = 1;
+		                    }
+		                    elsif (($distance <= 300) and ($len1 >= $distance) and ($len2 >= $distance) and ($lenrate >= 0.8) and ($lenrate <= 1.25)){
+		                    	$ovl_flag = 1;
+		                    }
+		                    elsif (($distance <= 1000) and ($len1 >= $distance) and ($len2 >= $distance) and ($lenrate >= 0.95) and ($lenrate <= 1.05)){
+		                    	$ovl_flag = 1;
+		                    }
+		                    elsif (($distance <= 10) and ($len1 <= 10) and ($len1 > 3) and ($len2 <= 10) and ($len2 > 3) and ($lenrate >= 0.5) and ($lenrate <= 2)){
+		                    	$ovl_flag = 1;
+		                    }
+		                    elsif (($distance <= 2) and ($len1 <= 3) and ($len2 <= 3) and ($lenrate >= 0.5) and ($lenrate <= 2)){
+		                    	$ovl_flag = 1;
+		                    }
+		                    if ($ovl_flag == 1){
+		                        if ($sn2 >= $sn1){
+		                            foreach (@idpos1){
+			                            my ($id, $spos) = split (/==/, $_);
+			                            ${$ids{$id}}{$spos} = $_;
+			                        }
+			                        foreach (@idpos2){
+			                            my ($id, $spos) = split (/==/, $_);
+			                            ${$ids{$id}}{$spos} = $_;
+			                        }
+			                        $new_pos = $pos2;
+			                        delete ${${${$vcf_type2{$type}}{$chr}}{$bin1}}{$pos1};
+			                        $removed{$pos1} = 1;
+			                        $flag = 2;
+		                        }
+		                        else{
+		                            foreach (@idpos2){
+			                            my ($id, $spos) = split (/==/, $_);
+			                            ${$ids{$id}}{$spos} = $_;
+			                        }
+			                        foreach (@idpos1){
+			                            my ($id, $spos) = split (/==/, $_);
+			                            ${$ids{$id}}{$spos} = $_;
+			                        }
+			                        $new_pos = $pos1;
+			                        delete ${${${$vcf_type2{$type}}{$chr}}{$bin1}}{$pos2};
+			                        $removed{$pos2} = 1;
+			                        $flag = 1;
+		                        }
+		                    }
+		                    if ($flag >= 1){
+			                    foreach my $gid (sort keys %ids){
+			                    	foreach my $spos (sort {$a <=> $b} keys %{$ids{$gid}}){
+				                        my ($gid2, $spos2, $len2) = split (/==/, ${$ids{$gid}}{$spos});
+				                        $new_idpos .= "${$ids{$gid}}{$spos},,";
+				                        push @len, $len2;
+				                    }
+			                    }
+			                    my $hnum = int (@len * 0.5);
+			                    $new_len = $len[$hnum];
+			                    $new_idpos =~ s/,,$//;
+			                    ${${${$vcf_type2{$type}}{$chr}}{$bin1}}{$new_pos} = "SVLEN2=$new_len;SAMPLES=$new_idpos";
+			                    delete $removed{$new_pos} if (exists $removed{$new_pos});
+			                    last if ($flag == 2);
+		                    }
+			            }
+			            else{
+			            	if ($distance <= 5){
+		                        my $overlap = $end1 - $pos2 + 1;
+		                        $overlap = $len2 if ($end2 < $end1);
+		                        my $ovl_flag = 0;
+		                        if (($overlap >= $len1 * $min_overlap_ratio) and ($overlap >= $len2 * $min_overlap_ratio)){
+		                        	$ovl_flag = 1;
+		                        }
+		                        elsif (($overlap > 0) and ($len1 <= 10) and ($len2 <= 10) and ($lenrate <= 2) and ($lenrate >= 0.5)){
+		                        	$ovl_flag = 1;
+		                        }
+		                        elsif (($len1 <= 5) and ($len2 <= 5) and ($lenrate <= 2) and ($lenrate >= 0.5)){
+		                        	$ovl_flag = 1;
+		                        }
+		                        if ($ovl_flag == 1){
+		                        	my %ids;
+				                    my $new_sn = 0;
+				                    my $new_idpos = '';
+				                    my $new_pos = 0;
+				                    my $new_len = 0;
+				                    my @len;
+				                    my $flag = 0;
+				                    if ($sn2 >= $sn1){
+				                        foreach (@idpos1){
+				                            my ($id, $spos) = split (/==/, $_);
+				                            ${$ids{$id}}{$spos} = $_;
+				                        }
+				                        foreach (@idpos2){
+				                            my ($id, $spos) = split (/==/, $_);
+				                            ${$ids{$id}}{$spos} = $_;
+				                        }
+				                        $new_pos = $pos2;
+				                        delete ${${${$vcf_type2{$type}}{$chr}}{$bin1}}{$pos1};
+				                        $removed{$pos1} = 1;
+				                        $flag = 2;
+				                    }
+				                    else{
+				                        foreach (@idpos2){
+				                            my ($id, $spos) = split (/==/, $_);
+				                            ${$ids{$id}}{$spos} = $_;
+				                        }
+				                        foreach (@idpos1){
+				                            my ($id, $spos) = split (/==/, $_);
+				                            ${$ids{$id}}{$spos} = $_;
+				                        }
+				                        $new_pos = $pos1;
+				                        delete ${${${$vcf_type2{$type}}{$chr}}{$bin1}}{$pos2};
+				                        $removed{$pos2} = 1;
+				                        $flag = 1;
+				                    }
+				                    foreach my $gid (sort keys %ids){
+				                    	foreach my $spos (sort {$a <=> $b} keys %{$ids{$gid}}){
+					                        my ($gid2, $spos2, $len2) = split (/==/, ${$ids{$gid}}{$spos});
+					                        $new_idpos .= "${$ids{$gid}}{$spos},,";
+					                        push @len, $len2;
+					                    }
+				                    }
+				                    my $hnum = int (@len * 0.5);
+				                    $new_len = $len[$hnum];
+				                    $new_idpos =~ s/,,$//;
+				                    ${${${$vcf_type2{$type}}{$chr}}{$bin1}}{$new_pos} = "SVLEN2=$new_len;SAMPLES=$new_idpos";
+				                    delete $removed{$new_pos} if (exists $removed{$new_pos});
+				                    last if ($flag == 2);
+		                        }
+		                    }
+			            }
+			        }
+			    }
+			}
+		}
+	}
+	foreach my $type (keys %vcf_type2){
+	    foreach my $chr (keys %{$vcf_type2{$type}}){
+	    	foreach my $bin (keys %{${$vcf_type2{$type}}{$chr}}){
+		        foreach my $pos (keys %{${${$vcf_type2{$type}}{$chr}}{$bin}}){
+		            ${${$vcf_cons{$chr}}{$pos}}{$type} = ${${${$vcf_type2{$type}}{$chr}}{$bin}}{$pos} if (!exists ${${$vcf_cons{$chr}}{$pos}}{$type});
+		        }
+		    }
+	    }
+	}
+	%vcf_type2 = ();
+}
+else{
+	foreach my $type (keys %vcf_type){
+	    foreach my $chr (keys %{$vcf_type{$type}}){
+	        my $chr2 = $chr;
+	        $chr2 =~ s/^0*//;
+	        my %removed;
+	        foreach my $pos1 (sort {$a <=> $b} keys %{${$vcf_type{$type}}{$chr}}){
+	        	next if (exists $removed{$pos1});
+	            my $line1 = ${${$vcf_type{$type}}{$chr}}{$pos1};
+	            my $len1 = $1 if ($line1 =~ /SVLEN2=-*(\d+)/);
+	            my $end1 = $pos1 + $len1 - 1;
+	            $end1 = $pos1 if ($type eq 'INS');
+	            my $idpos1 = $1 if ($line1 =~ /SAMPLES=(.+)/);
+	            my @idpos1 = split (/,,/, $idpos1);
+	            my $sn1 = scalar @idpos1;
+	            foreach my $pos2 (sort {$a <=> $b} keys %{${$vcf_type{$type}}{$chr}}){
+	            	next if ($pos2 <= $pos1);
+	            	next if (exists $removed{$pos2});
+	            	last if ($pos2 > $end1 + 1000);
+		            my $line2 = ${${$vcf_type{$type}}{$chr}}{$pos2};
+		            my $len2 = $1 if ($line2 =~ /SVLEN2=-*(\d+)/);
+		            next if ($len2 == 0);
+		            my $lenrate = int ($len1 / $len2 * 100 + 0.5) / 100;
+		            next if ($lenrate > 2) or ($lenrate < 0.5);
+		            my $end2 = $pos2 + $len2 - 1;
+		            $end2 = $pos2 if ($type eq 'INS');
+		            my $idpos2 = $1 if ($line2 =~ /SAMPLES=(.+)/);
+		            my @idpos2 = split (/,,/, $idpos2);
+	            	my $sn2 = scalar @idpos2;
+		            my $distance = $pos2 - $end1;
+		            if ($type eq 'INS'){
+		            	my %ids;
+	                    my $new_sn = 0;
+	                    my $new_idpos = '';
+	                    my $new_pos = 0;
+	                    my $new_len = 0;
+	                    my @len;
+	                    my $flag = 0;
+	                    my $ovl_flag = 0;
+	                    if (($distance <= 150) and ($len1 * 0.5 >= $distance) and ($len2 * 0.5 >= $distance) and ($lenrate > 0.556) and ($lenrate < 1.8)){
+	                    	$ovl_flag = 1;
+	                    }
+	                    elsif (($distance <= 300) and ($len1 >= $distance) and ($len2 >= $distance) and ($lenrate >= 0.8) and ($lenrate <= 1.25)){
+	                    	$ovl_flag = 1;
+	                    }
+	                    elsif (($distance <= 1000) and ($len1 >= $distance) and ($len2 >= $distance) and ($lenrate >= 0.95) and ($lenrate <= 1.05)){
+	                    	$ovl_flag = 1;
+	                    }
+	                    elsif (($distance <= 10) and ($len1 <= 10) and ($len1 > 3) and ($len2 <= 10) and ($len2 > 3) and ($lenrate >= 0.5) and ($lenrate <= 2)){
+	                    	$ovl_flag = 1;
+	                    }
+	                    elsif (($distance <= 2) and ($len1 <= 3) and ($len2 <= 3) and ($lenrate >= 0.5) and ($lenrate <= 2)){
+	                    	$ovl_flag = 1;
+	                    }
+	                    if ($ovl_flag == 1){
+	                        if ($sn2 >= $sn1){
+	                            foreach (@idpos1){
 		                            my ($id, $spos) = split (/==/, $_);
 		                            ${$ids{$id}}{$spos} = $_;
 		                        }
@@ -1872,9 +2018,9 @@ foreach my $type (keys %vcf_type){                  # merge overlapping variants
 		                        delete ${${$vcf_type{$type}}{$chr}}{$pos1};
 		                        $removed{$pos1} = 1;
 		                        $flag = 2;
-		                    }
-		                    else{
-		                        foreach (@idpos2){
+	                        }
+	                        else{
+	                            foreach (@idpos2){
 		                            my ($id, $spos) = split (/==/, $_);
 		                            ${$ids{$id}}{$spos} = $_;
 		                        }
@@ -1886,7 +2032,9 @@ foreach my $type (keys %vcf_type){                  # merge overlapping variants
 		                        delete ${${$vcf_type{$type}}{$chr}}{$pos2};
 		                        $removed{$pos2} = 1;
 		                        $flag = 1;
-		                    }
+	                        }
+	                    }
+	                    if ($flag >= 1){
 		                    foreach my $gid (sort keys %ids){
 		                    	foreach my $spos (sort {$a <=> $b} keys %{$ids{$gid}}){
 			                        my ($gid2, $spos2, $len2) = split (/==/, ${$ids{$gid}}{$spos});
@@ -1900,22 +2048,87 @@ foreach my $type (keys %vcf_type){                  # merge overlapping variants
 		                    ${${$vcf_type{$type}}{$chr}}{$new_pos} = "SVLEN2=$new_len;SAMPLES=$new_idpos";
 		                    delete $removed{$new_pos} if (exists $removed{$new_pos});
 		                    last if ($flag == 2);
-                        }
-                    }
-	            }
+	                    }
+		            }
+		            else{
+		            	if ($distance <= 5){
+	                        my $overlap = $end1 - $pos2 + 1;
+	                        $overlap = $len2 if ($end2 < $end1);
+	                        my $ovl_flag = 0;
+	                        if (($overlap >= $len1 * $min_overlap_ratio) and ($overlap >= $len2 * $min_overlap_ratio)){
+	                        	$ovl_flag = 1;
+	                        }
+	                        elsif (($overlap > 0) and ($len1 <= 10) and ($len2 <= 10) and ($lenrate <= 2) and ($lenrate >= 0.5)){
+	                        	$ovl_flag = 1;
+	                        }
+	                        elsif (($len1 <= 5) and ($len2 <= 5) and ($lenrate <= 2) and ($lenrate >= 0.5)){
+	                        	$ovl_flag = 1;
+	                        }
+	                        if ($ovl_flag == 1){
+	                        	my %ids;
+			                    my $new_sn = 0;
+			                    my $new_idpos = '';
+			                    my $new_pos = 0;
+			                    my $new_len = 0;
+			                    my @len;
+			                    my $flag = 0;
+			                    if ($sn2 >= $sn1){
+			                        foreach (@idpos1){
+			                            my ($id, $spos) = split (/==/, $_);
+			                            ${$ids{$id}}{$spos} = $_;
+			                        }
+			                        foreach (@idpos2){
+			                            my ($id, $spos) = split (/==/, $_);
+			                            ${$ids{$id}}{$spos} = $_;
+			                        }
+			                        $new_pos = $pos2;
+			                        delete ${${$vcf_type{$type}}{$chr}}{$pos1};
+			                        $removed{$pos1} = 1;
+			                        $flag = 2;
+			                    }
+			                    else{
+			                        foreach (@idpos2){
+			                            my ($id, $spos) = split (/==/, $_);
+			                            ${$ids{$id}}{$spos} = $_;
+			                        }
+			                        foreach (@idpos1){
+			                            my ($id, $spos) = split (/==/, $_);
+			                            ${$ids{$id}}{$spos} = $_;
+			                        }
+			                        $new_pos = $pos1;
+			                        delete ${${$vcf_type{$type}}{$chr}}{$pos2};
+			                        $removed{$pos2} = 1;
+			                        $flag = 1;
+			                    }
+			                    foreach my $gid (sort keys %ids){
+			                    	foreach my $spos (sort {$a <=> $b} keys %{$ids{$gid}}){
+				                        my ($gid2, $spos2, $len2) = split (/==/, ${$ids{$gid}}{$spos});
+				                        $new_idpos .= "${$ids{$gid}}{$spos},,";
+				                        push @len, $len2;
+				                    }
+			                    }
+			                    my $hnum = int (@len * 0.5);
+			                    $new_len = $len[$hnum];
+			                    $new_idpos =~ s/,,$//;
+			                    ${${$vcf_type{$type}}{$chr}}{$new_pos} = "SVLEN2=$new_len;SAMPLES=$new_idpos";
+			                    delete $removed{$new_pos} if (exists $removed{$new_pos});
+			                    last if ($flag == 2);
+	                        }
+	                    }
+		            }
+		        }
+		    }
+		}
+	}
+	foreach my $type (keys %vcf_type){
+	    foreach my $chr (keys %{$vcf_type{$type}}){
+	        foreach my $pos (keys %{${$vcf_type{$type}}{$chr}}){
+	            ${${$vcf_cons{$chr}}{$pos}}{$type} = ${${$vcf_type{$type}}{$chr}}{$pos};
 	        }
 	    }
 	}
+	%vcf_type = ();
 }
-
-foreach my $type (keys %vcf_type){
-    foreach my $chr (keys %{$vcf_type{$type}}){
-        foreach my $pos (keys %{${$vcf_type{$type}}{$chr}}){
-            ${${$vcf_cons{$chr}}{$pos}}{$type} = ${${$vcf_type{$type}}{$chr}}{$pos};
-        }
-    }
-}
-%vcf_type = ();
 
 foreach my $chr (sort keys %vcf_cons){
 	my $chr2 = $chr;
