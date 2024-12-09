@@ -1133,13 +1133,16 @@ while (my $line = <FILE>){
                     my $str_motif = $STR_motif{$strid};
                     my $motif_size = length $str_motif;
                     my $mei_match_flag = 0;
-                    if (($me_type eq 'ALU') and ($overlaplen >= 250) and ($motif_size <= 150)){
+                    if (($me_type eq 'ALU') and ($overlaplen >= 180) and ($motif_size <= 150)){
                         $mei_match_flag = 1;
                     }
-                    elsif (($me_type eq 'SVA') and ($overlaplen >= 1900)){
+                    elsif (($me_type eq 'SVA') and ($overlaplen >= 1000)){
                         $mei_match_flag = 1;
                     }
-                    elsif (($me_type eq 'LINE1') and ($overlaplen >= 5000)){
+                    elsif (($me_type eq 'LINE1') and ($overlaplen >= 3000)){
+                        $mei_match_flag = 1;
+                    }
+                    elsif (($me_type eq 'HERVK') and ($overlaplen >= 3000)){
                         $mei_match_flag = 1;
                     }
                     if ($mei_match_flag == 1){
@@ -1970,7 +1973,7 @@ sub find_me{
         my $me_len = $TE_len{$me};
         next if ($ilen < 150) and ($me_len >= 1000);
         next if ($ilen > $me_len * 3);
-        my ($overlap, $cn, $direction, $te_overlap) = &yass_align_me ($me, $read_seq, $chr2, $pos);
+        my ($overlap, $cn, $direction, $qcoverage) = &yass_align_me ($me, $read_seq, $chr2, $pos);
         if ($overlap > 0){
             $te_type = $me;
             $overlaplen = $overlap;
@@ -2090,19 +2093,13 @@ sub yass_align_dup{
     my $overlap_len = 0;
     my $match_pos1 = 0;
     my $match_pos2 = 0;
-    my $qpos1 = 0;
-    my $qpos2 = 0;
-    my $match = 0;
+    my %match_pos;
     my $match_flag = 0;
     my $direction = 'F';
     my $indel_count = 0;
     foreach my $line (@result){
         chomp $line;
-        if (($line =~ /\*\((\d+)-(\d+)\)\((\d+)-(\d+)\)/) and ($match == 0)){
-            $overlap_len = $4 - $3 if ($4 >= $3);
-            $overlap_len = $3 - $4 if ($3 > $4);
-            next if ($overlap_len < 40);
-            $match = 1;
+        if ($line =~ /\*\((\d+)-(\d+)\)\((\d+)-(\d+)\)/){
             $match_flag = 1;
             if ($1 < $2){
                 $match_pos1 = $1;
@@ -2113,44 +2110,26 @@ sub yass_align_dup{
                 $match_pos2 = $1;
                 $direction = 'R';
             }
-            $qpos1 = $3;
-            $qpos2 = $4;
+            $match_pos{$match_pos1} = $match_pos2;
         }
-        elsif (($line =~ /\*\((\d+)-(\d+)\)\((\d+)-(\d+)\)/) and ($match > 0)){
-            $match_flag = 0;
-            if ($3 < $qpos1){
-                $match_pos1 = $1 if ($direction eq 'F') and ($match_pos1 > $1);
-                $match_pos2 = $1 if ($direction eq 'R') and ($match_pos2 < $1);
-                if ($4 < $qpos1){
-                    $overlap_len += $4 - $3;
-                }
-                else{
-                    $overlap_len += $qpos1 - $3;
-                }
-                $qpos1 = $3;
-                $match ++;
-            }
-            elsif ($4 > $qpos2){
-                $match_pos2 = $2 if ($direction eq 'F') and ($match_pos2 > $2);
-                $match_pos1 = $2 if ($direction eq 'R') and ($match_pos1 < $2);
-                if ($3 > $qpos2){
-                    $overlap_len += $4 - $3;
-                }
-                else{
-                    $overlap_len += $4 - $qpos2;
-                }
-                $qpos2 = $4;
-                $match ++;
-            }
-            else{
-                next;
-            }
-        }
-        elsif ((($match == 1) and ($match_flag == 1)) and ($line =~ /^[ACGTN\-]+$/)){
+        elsif (($match_flag == 1) and ($line =~ /^[ACGTN\-]+$/)){
             $indel_count ++ while ($line =~ /-/g);
         }
     }
-    if ($match >= 1){
+    if ($match_flag == 1){
+        my $pre_end = 0;
+        foreach my $pos1 (sort {$a <=> $b} keys %match_pos){
+            my $pos2 = $match_pos{$pos1};
+            my $matchlen = $pos2 - $pos1 + 1;
+            if ($pos2 <= $pre_end){
+                next;
+            }
+            elsif ($pos1 < $pre_end){
+                $matchlen = $pos2 - $pre_end + 1;
+            }
+            $overlap_len += $matchlen;
+            $pre_end = $pos2;
+        }
         my $coverage = int ($overlap_len / $seq2_len * 1000 + 0.5) / 10;
         my $indelrate = int ($indel_count / $overlap_len * 1000 + 0.5) / 10;
         if (($indelrate <= $indel_rate) and ($coverage >= $min_coverage)){
@@ -2183,9 +2162,7 @@ sub yass_align_me{
     my $overlap_len = 0;
     my $match_pos1 = 0;
     my $match_pos2 = 0;
-    my $qpos1 = 0;
-    my $qpos2 = 0;
-    my $match = 0;
+    my %match_pos;
     my $match_flag = 0;
     my $direction = 'F';
     my $indel_count = 0;
@@ -2194,11 +2171,7 @@ sub yass_align_me{
     my $cn = 0;
     foreach my $line (@result){
         chomp $line;
-        if (($line =~ /\*\((\d+)-(\d+)\)\((\d+)-(\d+)\)/) and ($match == 0)){
-            $overlap_len = $4 - $3 if ($4 >= $3);
-            $overlap_len = $3 - $4 if ($3 > $4);
-            next if ($overlap_len < 40);
-            $match = 1;
+        if ($line =~ /\*\((\d+)-(\d+)\)\((\d+)-(\d+)\)/){
             $match_flag = 1;
             if ($1 < $2){
                 $match_pos1 = $1;
@@ -2209,51 +2182,32 @@ sub yass_align_me{
                 $match_pos2 = $1;
                 $direction = 'R';
             }
-            $qpos1 = $3;
-            $qpos2 = $4;
+            $match_pos{$match_pos1} = $match_pos2;
         }
-        elsif (($line =~ /\*\((\d+)-(\d+)\)\((\d+)-(\d+)\)/) and ($match > 0)){
-            $match_flag = 0;
-            if ($3 < $qpos1){
-                $match_pos1 = $1 if ($direction eq 'F') and ($match_pos1 > $1);
-                $match_pos2 = $1 if ($direction eq 'R') and ($match_pos2 < $1);
-                if ($4 < $qpos1){
-                    $overlap_len += $4 - $3;
-                }
-                else{
-                    $overlap_len += $qpos1 - $3;
-                }
-                $qpos1 = $3;
-                $match ++;
-            }
-            elsif ($4 > $qpos2){
-                $match_pos2 = $2 if ($direction eq 'F') and ($match_pos2 > $2);
-                $match_pos1 = $2 if ($direction eq 'R') and ($match_pos1 < $2);
-                if ($3 > $qpos2){
-                    $overlap_len += $4 - $3;
-                }
-                else{
-                    $overlap_len += $4 - $qpos2;
-                }
-                $qpos2 = $4;
-                $match ++;
-            }
-            else{
-                next;
-            }
-        }
-        elsif ((($match == 1) and ($match_flag == 1)) and ($line =~ /^[ACGTN\-]+$/)){
+        elsif (($match_flag == 1) and ($line =~ /^[ACGTN\-]+$/)){
             $indel_count ++ while ($line =~ /-/g);
         }
     }
-    if ($match >= 1){
+    if ($match_flag == 1){
+        my $pre_end = 0;
+        foreach my $pos1 (sort {$a <=> $b} keys %match_pos){
+            my $pos2 = $match_pos{$pos1};
+            my $matchlen = $pos2 - $pos1 + 1;
+            if ($pos2 <= $pre_end){
+                next;
+            }
+            elsif ($pos1 < $pre_end){
+                $matchlen = $pos2 - $pre_end + 1;
+            }
+            $overlap_len += $matchlen;
+            $pre_end = $pos2;
+        }
         my $indelrate = int ($indel_count / $overlap_len * 1000 + 0.5) / 10;
         my $coverage_query = int ($overlap_len / $ins_len * 1000 + 0.5) / 10;
-        my $te_overlap = $match_pos2 - $match_pos1;
-        my $coverage_me = int ($te_overlap / $me_len * 1000 + 0.5) / 10;
+        my $coverage_me = int ($overlap_len / $me_len * 1000 + 0.5) / 10;
         if (($indelrate <= $indel_rate) and (($coverage_query >= $min_me_coverage2) or ($coverage_me >= $min_me_coverage2))){
             $cn = int ($overlap_len / $me_len * 10 + 0.5) / 10;
-            return ($overlap_len, $cn, $direction, $te_overlap);
+            return ($overlap_len, $cn, $direction, $coverage_query);
         }
         else{
             return (0, 0, '', 0);
@@ -2349,53 +2303,23 @@ sub yass_align_inv{
     my $overlap_len = 0;
     my $qpos1 = 0;
     my $qpos2 = 0;
-    my $match = 0;
     my $match_flag = 0;
     my $indel_count = 0;
     foreach my $line (@result){
         chomp $line;
-        if (($line =~ /\*\((\d+)-(\d+)\)\((\d+)-(\d+)\)/) and ($match == 0)){
+        if ($line =~ /\*\((\d+)-(\d+)\)\((\d+)-(\d+)\)/){
             my $match_len1 = $2 - $1 + 1;
             my $match_len2 = $4 - $3 + 1;
-            $overlap_len = $match_len1;
-            $overlap_len = $match_len2 if ($match_len1 < $match_len2);
+            $overlap_len += $match_len1 if ($match_len1 >= $match_len2);
+            $overlap_len += $match_len2 if ($match_len1 < $match_len2);
             next if ($overlap_len < 30);
-            $match = 1;
             $match_flag = 1;
-            $qpos1 = $3;
-            $qpos2 = $4;
         }
-        elsif (($line =~ /\*\((\d+)-(\d+)\)\((\d+)-(\d+)\)/) and ($match > 0)){
-            $match_flag = 0;
-            if ($3 < $qpos1){
-                if ($4 < $qpos1){
-                    $overlap_len += $4 - $3;
-                }
-                else{
-                    $overlap_len += $qpos1 - $3;
-                }
-                $qpos1 = $3;
-                $match ++;
-            }
-            elsif ($4 > $qpos2){
-                if ($3 > $qpos2){
-                    $overlap_len += $4 - $3;
-                }
-                else{
-                    $overlap_len += $4 - $qpos2;
-                }
-                $qpos2 = $4;
-                $match ++;
-            }
-            else{
-                next;
-            }
-        }
-        elsif ((($match == 1) and ($match_flag == 1)) and ($line =~ /^[ACGTN\-]+$/)){
+        elsif (($match_flag == 1) and ($line =~ /^[ACGTN\-]+$/)){
             $indel_count ++ while ($line =~ /-/g);
         }
     }
-    if ($match >= 1){
+    if ($match_flag == 1){
         my $indelrate = int ($indel_count / $overlap_len * 1000 + 0.5) / 10;
         my $coverage = int ($overlap_len / $seq2_len * 1000 + 0.5) / 10;
         if (($indelrate <= $indel_rate) and ($coverage >= 0.7)){
