@@ -2067,7 +2067,7 @@ sub yass_align_dup{
     my $indel_count = 0;
     foreach my $line (@result){
         chomp $line;
-        if ($line =~ /\*\((\d+)-(\d+)\)\((\d+)-(\d+)\)/){
+        if (($line =~ /\*\((\d+)-(\d+)\)\((\d+)-(\d+)\)/) and ($match_flag == 0)){
             $match_flag = 1;
             if ($1 < $2){
                 $match_pos1 = $1;
@@ -2079,6 +2079,21 @@ sub yass_align_dup{
                 $direction = 'R';
             }
             $match_pos{$match_pos1} = $match_pos2;
+        }
+        elsif (($line =~ /\*\((\d+)-(\d+)\)\((\d+)-(\d+)\)/) and ($match_flag == 1)){
+            my $dir2 = 'F';
+            if ($1 < $2){
+                $match_pos1 = $1;
+                $match_pos2 = $2;
+            }
+            else{
+                $match_pos1 = $2;
+                $match_pos2 = $1;
+                $dir2 = 'R';
+            }
+            if ((!exists $match_pos{$match_pos1}) and ($direction eq $dir2)){
+                $match_pos{$match_pos1} = $match_pos2;
+            }
         }
         elsif (($match_flag == 1) and ($line =~ /^[ACGTN\-]+$/)){
             $indel_count ++ while ($line =~ /-/g);
@@ -2138,7 +2153,7 @@ sub yass_align_me{
     my $cn = 0;
     foreach my $line (@result){
         chomp $line;
-        if ($line =~ /\*\((\d+)-(\d+)\)\((\d+)-(\d+)\)/){
+        if (($line =~ /\*\((\d+)-(\d+)\)\((\d+)-(\d+)\)/) and ($match_flag == 0)){
             $match_flag = 1;
             if ($1 < $2){
                 $match_pos1 = $1;
@@ -2150,6 +2165,21 @@ sub yass_align_me{
                 $direction = 'R';
             }
             $match_pos{$match_pos1} = $match_pos2;
+        }
+        elsif (($line =~ /\*\((\d+)-(\d+)\)\((\d+)-(\d+)\)/) and ($match_flag == 1)){
+            my $dir2 = 'F';
+            if ($1 < $2){
+                $match_pos1 = $1;
+                $match_pos2 = $2;
+            }
+            else{
+                $match_pos1 = $2;
+                $match_pos2 = $1;
+                $dir2 = 'R';
+            }
+            if ((!exists $match_pos{$match_pos1}) and ($direction eq $dir2)){
+                $match_pos{$match_pos1} = $match_pos2;
+            }
         }
         elsif (($match_flag == 1) and ($line =~ /^[ACGTN\-]+$/)){
             $indel_count ++ while ($line =~ /-/g);
