@@ -46,6 +46,7 @@ my $targeted_seq = 0;
 my $max_mismatch = 15;
 
 my $min_indel_size = 50;
+my $min_str_indel_size = 50;
 my $min_ins_str_mei = 200;
 
 my $indel_rate = 10;
@@ -61,7 +62,7 @@ my $intersperse_dup_find = 1;
 
 my $mei_find = 1;
 
-my $bp_diff0 = 50;
+my $bp_diff0 = 20;
 my $bp_diff = 100;
 my $bp_diff2 = 200;
 my $bp_diff3 = 150;
@@ -116,6 +117,9 @@ while (my $line = <FILE>){
     elsif ($arg eq 'min_len'){
         $min_indel_size = $value;
     }
+    elsif ($arg eq 'min_str_len'){
+        $min_str_indel_size = $value;
+    }
     elsif ($arg eq 'min_ins_read'){
         $min_ins_reads = $value;
     }
@@ -157,6 +161,9 @@ while (my $line = <FILE>){
     }
 }
 close (FILE);
+
+$max_dist = $min_indel_size * 0.9 if ($max_dist > $min_indel_size * 0.9);
+$max_dist = $min_str_indel_size * 0.9 if ($max_dist > $min_str_indel_size * 0.9);
 
 if ($samtool_path ne ''){
     $ENV{PATH} = "$samtool_path:" . $ENV{PATH};
@@ -201,8 +208,8 @@ while (my $line = <FILE>){
     }
     my $sar = 0;
     if ($type =~ /TR/){
-        my $start = $pos - $bp_diff;
-        my $end = $STR{$pos} + $bp_diff;
+        my $start = $pos - $bp_diff0;
+        my $end = $STR{$pos} + $bp_diff0;
         my @sam = `samtools view $bam_file $target_chr:$start-$end | awk \'\$5==0\'` if ($bam_file =~ /\.bam$/);
         @sam = `samtools view --reference $ref_file $bam_file $target_chr:$start-$end | awk \'\$5==0\'` if ($bam_file =~ /\.cram$/);
         $type = 'INS' if ($type =~ /ins/);
@@ -221,7 +228,7 @@ while (my $line = <FILE>){
                 my $tag = $2;
                 $count ++;
                 if (($tag =~ /S|H/) and ($count == 1)){
-                    if (($sublen >= $min_clip_len) and ($spos >= $start) and ($spos <= $pos + $bp_diff)){
+                    if (($sublen >= $min_clip_len) and ($spos >= $start) and ($spos <= $pos + $bp_diff0)){
                         $str_bp ++ if ($type eq 'INS');
                     }
                     next;
@@ -230,17 +237,17 @@ while (my $line = <FILE>){
                     $send += $sublen;
                 }
                 elsif ($tag eq 'D'){
-                    $indel{$end} = -$sublen if ($sublen >= $max_dist) and ($send >= $start) and ($send <= $end);
+                    $indel{$send} = -$sublen if ($sublen >= $max_dist) and ($send >= $start) and ($send <= $end);
                     $send += $sublen;
                 }
                 elsif ($tag eq 'I'){
-                    $indel{$end} = $sublen if ($sublen >= $max_dist) and ($send >= $start) and ($send <= $end);
+                    $indel{$send} = $sublen if ($sublen >= $max_dist) and ($send >= $start) and ($send <= $end);
                 }
                 elsif ($tag eq 'X'){
                     $send += $sublen;
                 }
                 elsif (($tag =~ /S|H/) and ($sublen >= $min_clip_len)){
-                    if (($send >= $end - $bp_diff * 2) and ($send <= $end)){
+                    if (($send >= $end - $bp_diff0 * 2) and ($send <= $end)){
                         $str_bp ++ if ($type eq 'INS');
                     }
                 }
@@ -294,7 +301,7 @@ while (my $line = <FILE>){
                     $send += $sublen;
                 }
                 elsif ($tag eq 'I'){
-                    $ins{$end} = $sublen if ($sublen >= $max_dist) and ($send >= $start) and ($send <= $end);
+                    $ins{$send} = $sublen if ($sublen >= $max_dist) and ($send >= $start) and ($send <= $end);
                 }
                 elsif ($tag eq 'X'){
                     $send += $sublen;
@@ -369,7 +376,7 @@ while (my $line = <FILE>){
                     $send += $sublen;
                 }
                 elsif ($tag eq 'D'){
-                    $del{$end} = $sublen if ($sublen >= $max_dist) and ($send >= $start) and ($send <= $end);
+                    $del{$send} = $sublen if ($sublen >= $max_dist) and ($send >= $start) and ($send <= $end);
                     $send += $sublen;
                 }
                 elsif ($tag eq 'I'){
