@@ -2097,6 +2097,7 @@ sub yass_align_dup{
     my $match_flag = 0;
     my $direction = 'F';
     my $indel_count = 0;
+    my $pre_end = 0;
     foreach my $line (@result){
         chomp $line;
         if (($line =~ /\*\((\d+)-(\d+)\)\((\d+)-(\d+)\)/) and ($match_flag == 0)){
@@ -2111,8 +2112,9 @@ sub yass_align_dup{
                 $direction = 'R';
             }
             $match_pos{$match_pos1} = $match_pos2;
+            $pre_end = $match_pos2;
         }
-        elsif (($line =~ /\*\((\d+)-(\d+)\)\((\d+)-(\d+)\)/) and ($match_flag == 1)){
+        elsif (($line =~ /\*\((\d+)-(\d+)\)\((\d+)-(\d+)\)/) and ($match_flag >= 1)){
             my $dir2 = 'F';
             if ($1 < $2){
                 $match_pos1 = $1;
@@ -2126,12 +2128,23 @@ sub yass_align_dup{
             if ((!exists $match_pos{$match_pos1}) and ($direction eq $dir2)){
                 $match_pos{$match_pos1} = $match_pos2;
             }
+            if ($match_pos1 < $pre_end){
+                $match_flag = 2;
+            }
+            else{
+                $match_flag = 1;
+            }
+            $pre_end = $match_pos2 if ($match_pos2 > $pre_end);
         }
         elsif (($match_flag == 1) and ($line =~ /^[ACGTN\-]+$/)){
+            if ($line =~ /\-{10,}/){
+                $indel_count ++;
+                next;
+            }
             $indel_count ++ while ($line =~ /-/g);
         }
     }
-    if ($match_flag == 1){
+    if ($match_flag >= 1){
         my $pre_end = 0;
         foreach my $pos1 (sort {$a <=> $b} keys %match_pos){
             my $pos2 = $match_pos{$pos1};
@@ -2184,6 +2197,7 @@ sub yass_align_me{
     my $min_me_coverage2 = $min_me_coverage;
     $min_me_coverage2 = 50 if ($ins_len < 150);
     my $cn = 0;
+    my $pre_end = 0;
     foreach my $line (@result){
         chomp $line;
         if (($line =~ /\*\((\d+)-(\d+)\)\((\d+)-(\d+)\)/) and ($match_flag == 0)){
@@ -2198,8 +2212,9 @@ sub yass_align_me{
                 $direction = 'R';
             }
             $match_pos{$match_pos1} = $match_pos2;
+            $pre_end = $match_pos2;
         }
-        elsif (($line =~ /\*\((\d+)-(\d+)\)\((\d+)-(\d+)\)/) and ($match_flag == 1)){
+        elsif (($line =~ /\*\((\d+)-(\d+)\)\((\d+)-(\d+)\)/) and ($match_flag >= 1)){
             my $dir2 = 'F';
             if ($1 < $2){
                 $match_pos1 = $1;
@@ -2213,12 +2228,23 @@ sub yass_align_me{
             if ((!exists $match_pos{$match_pos1}) and ($direction eq $dir2)){
                 $match_pos{$match_pos1} = $match_pos2;
             }
+            if ($match_pos1 < $pre_end){
+                $match_flag = 2;
+            }
+            else{
+                $match_flag = 1;
+            }
+            $pre_end = $match_pos2 if ($match_pos2 > $pre_end);
         }
         elsif (($match_flag == 1) and ($line =~ /^[ACGTN\-]+$/)){
+            if ($line =~ /\-{10,}/){
+                $indel_count ++;
+                next;
+            }
             $indel_count ++ while ($line =~ /-/g);
         }
     }
-    if ($match_flag == 1){
+    if ($match_flag >= 1){
         my $pre_end = 0;
         foreach my $pos1 (sort {$a <=> $b} keys %match_pos){
             my $pos2 = $match_pos{$pos1};

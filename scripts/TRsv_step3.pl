@@ -5,7 +5,7 @@ use FindBin qw($Bin);
 
 my $data_dir = "$Bin/../Data";
 
-my $ref_file = '';
+mmy $ref_file = '';
 
 my $simple_repeat = '';
 
@@ -173,6 +173,9 @@ my $temp_dir = "$out_prefix.temp";
 system ("mkdir $temp_dir") if (!-d $temp_dir);
 
 my %STR;
+my %step2;
+my %step2_type;
+my %SAR;
 
 open (FILE, $simple_repeat) or die "$simple_repeat is not found: $!\n" if ($simple_repeat !~ /\.gz$/);
 open (FILE, "gzip -dc $simple_repeat |") or die "$simple_repeat is not found: $!\n" if ($simple_repeat =~ /\.gz$/);
@@ -187,9 +190,6 @@ while (my $line = <FILE>){
     $STR{$pos} = $end;
 }
 close (FILE);
-
-my $step3_out = $step2_out . 2;
-open (OUT, "> $step3_out");
 
 open (FILE, $step2_out) or die "$step2_out is not found: $!\n";
 while (my $line = <FILE>){
@@ -206,315 +206,363 @@ while (my $line = <FILE>){
             $read = int ($read * 0.5 + 0.5);
         }
     }
-    my $sar = 0;
+    my $Mbin1 = int ($pos / $Mbin_size);
+    my $end = $pos;
     if ($type =~ /TR/){
-        my $start = $pos - $bp_diff0;
-        my $end = $STR{$pos} + $bp_diff0;
-        my @sam = `samtools view $bam_file $target_chr:$start-$end | awk \'\$5==0\'` if ($bam_file =~ /\.bam$/);
-        @sam = `samtools view --reference $ref_file $bam_file $target_chr:$start-$end | awk \'\$5==0\'` if ($bam_file =~ /\.cram$/);
-        $type = 'INS' if ($type =~ /ins/);
-        $type = 'DEL' if ($type =~ /del/);
-        my $str_indel = 0;
-        my $str_bp = 0;
-        foreach (@sam){
-            my @sline = split (/\t/, $_);
-            my $spos = $sline[3];
-            my $cigar = $sline[5];
-            my $send = $spos;
-            my %indel;
-            my $count = 0;
-            while ($cigar =~ /(\d+)([SHMIDX=])/g){
-                my $sublen = $1;
-                my $tag = $2;
-                $count ++;
-                if (($tag =~ /S|H/) and ($count == 1)){
-                    if (($sublen >= $min_clip_len) and ($spos >= $start) and ($spos <= $pos + $bp_diff0)){
-                        $str_bp ++ if ($type eq 'INS');
-                    }
-                    next;
-                }
-                if (($tag eq 'M') or ($tag eq '=')){
-                    $send += $sublen;
-                }
-                elsif ($tag eq 'D'){
-                    $indel{$send} = -$sublen if ($sublen >= $max_dist) and ($send >= $start) and ($send <= $end);
-                    $send += $sublen;
-                }
-                elsif ($tag eq 'I'){
-                    $indel{$send} = $sublen if ($sublen >= $max_dist) and ($send >= $start) and ($send <= $end);
-                }
-                elsif ($tag eq 'X'){
-                    $send += $sublen;
-                }
-                elsif (($tag =~ /S|H/) and ($sublen >= $min_clip_len)){
-                    if (($send >= $end - $bp_diff0 * 2) and ($send <= $end)){
-                        $str_bp ++ if ($type eq 'INS');
-                    }
-                }
-                last if ($send > $end);
-            }
-            my $sum_indel = 0;
-            foreach my $ipos (sort {$a <=> $b} keys %indel){
-                $sum_indel += $indel{$ipos};
-            }
-            if (($type eq 'DEL') and ($sum_indel < 0)){
-                $sum_indel = 0 - $sum_indel;
-                if (($sum_indel / $len >= 0.67) and ($sum_indel / $len <= 1.5)){
-                    $str_indel ++;
-                }
-            }
-            elsif (($type eq 'INS') and ($sum_indel > 0)){
-                if (($sum_indel / $len >= 0.67) and ($sum_indel / $len <= 1.5)){
-                    $str_indel ++;
-                }
-            }
-        }
-        $str_indel += int ($str_bp * 0.5) if ($type eq 'INS');
-        $sar = int ($str_indel / ($read + $str_indel) * 100 + 0.5) / 100;
+        $end = $STR{$pos};
     }
-    elsif (($type =~ /INS/) and ($len > 0)){
-        my $start = $pos - $bp_diff2;
-        $start = $pos - $max_bp_diff if ($len >= 500);
-        my $end = $pos + $bp_diff2;
-        $end = $pos + $max_bp_diff if ($len >= 500);
-        my @sam = `samtools view $bam_file $target_chr:$start-$end | awk \'\$5==0\'` if ($bam_file =~ /\.bam$/);
-        @sam = `samtools view --reference $ref_file $bam_file $target_chr:$start-$end | awk \'\$5==0\'` if ($bam_file =~ /\.cram$/);
-        my $ins = 0;
-        foreach (@sam){
-            my @sline = split (/\t/, $_);
-            my $spos = $sline[3];
-            my $cigar = $sline[5];
-            my $send = $spos;
-            my %ins;
-            my $count = 0;
-            while ($cigar =~ /(\d+)([SHMIDX=])/g){
-                my $sublen = $1;
-                my $tag = $2;
-                $count ++;
-                if (($tag =~ /S|H/) and ($count == 1)){
-                    next;
-                }
-                if (($tag eq 'M') or ($tag eq '=')){
-                    $send += $sublen;
-                }
-                elsif ($tag eq 'D'){
-                    $send += $sublen;
-                }
-                elsif ($tag eq 'I'){
-                    $ins{$send} = $sublen if ($sublen >= $max_dist) and ($send >= $start) and ($send <= $end);
-                }
-                elsif ($tag eq 'X'){
-                    $send += $sublen;
-                }
-                elsif (($tag =~ /S|H/) and ($count > 1)){
-                    next;
-                }
-                last if ($send > $end);
-            }
-            my $pre_ipos = 0;
-            my $pre_ilen = 0;
-            foreach my $ipos (sort {$a <=> $b} keys %ins){
-                my $ilen = $ins{$ipos};
-                my $distance = $ipos - $pre_ipos + 1;
-                my $flag = 0;
-                if (($pre_ipos > 0) and ($distance <= 50) and ($distance < $pre_ilen) and ($distance < $ilen)){
-                    $flag = 1;
-                }
-                elsif (($pre_ipos > 0) and ($distance <= 100) and ($distance < $pre_ilen * 0.2) and ($distance < $ilen * 0.2)){
-                    $flag = 1;
-                }
-                if ($flag == 1){
-                    if ($ilen >= $pre_ilen){
-                        $ins{$ipos} += $pre_ilen;
-                        delete $ins{$pre_ipos};
-                        $pre_ilen = $ilen + $pre_ilen;
-                        $pre_ipos = $ipos;
-                        next;
-                    }
-                    else{
-                        $ins{$pre_ipos} += $ilen;
-                        delete $ins{$ipos};
-                        $pre_ilen = $ilen + $pre_ilen;
-                        next;
-                    }
-                }
-                $pre_ipos = $ipos;
-                $pre_ilen = $ilen;
-            }
-            foreach my $ipos (sort {$a <=> $b} keys %ins){
-                my $ilen = $ins{$ipos};
-                if (($ilen / $len >= 0.67) and ($ilen / $len <= 1.5)){
-                    $ins ++;
-                }
-            }
-        }
-        $sar = int ($ins / ($read - $bp + $ins) * 100 + 0.5) / 100 if ($read - $bp + $ins > 0);
-    }
-    elsif ($type eq 'DEL'){
-        my $start = $pos - $bp_diff2;
-        $start = int ($pos - $len * 0.5) if ($len >= 500);
-        my $end = $pos + $len + $bp_diff2;
-        $end = int ($pos + $len + $len * 0.5) if ($len >= 500);
-        my @sam = `samtools view $bam_file $target_chr:$start-$end | awk \'\$5==0\'` if ($bam_file =~ /\.bam$/);
-        @sam = `samtools view --reference $ref_file $bam_file $target_chr:$start-$end | awk \'\$5==0\'` if ($bam_file =~ /\.cram$/);
-        my $del = 0;
-        foreach (@sam){
-            my @sline = split (/\t/, $_);
-            my $spos = $sline[3];
-            my $cigar = $sline[5];
-            my $send = $spos;
-            my %del;
-            my $count = 0;
-            while ($cigar =~ /(\d+)([SHMIDX=])/g){
-                my $sublen = $1;
-                my $tag = $2;
-                $count ++;
-                if (($tag =~ /S|H/) and ($count == 1)){
-                    next;
-                }
-                if (($tag eq 'M') or ($tag eq '=')){
-                    $send += $sublen;
-                }
-                elsif ($tag eq 'D'){
-                    $del{$send} = $sublen if ($sublen >= $max_dist) and ($send >= $start) and ($send <= $end);
-                    $send += $sublen;
-                }
-                elsif ($tag eq 'I'){
-                    next;
-                }
-                elsif ($tag eq 'X'){
-                    $send += $sublen;
-                }
-                elsif (($tag =~ /S|H/) and ($count > 1)){
-                    next;
-                }
-                last if ($send > $end);
-            }
-            my $pre_dpos = 0;
-            my $pre_dlen = 0;
-            foreach my $dpos (sort {$a <=> $b} keys %del){
-                my $dlen = $del{$dpos};
-                my $pre_dend = $pre_dpos + $dlen - 1;
-                my $distance = $dpos - $pre_dend + 1;
-                my $flag = 0;
-                if (($pre_dpos > 0) and ($distance <= 500) and ($distance < $pre_dlen * 0.5) and ($distance < $dlen * 0.5)){
-                    $flag = 1;
-                }
-                if ($flag == 1){
-                    if ($dlen >= $pre_dlen){
-                        $del{$dpos} = $dpos + $dlen - $pre_dpos;
-                        delete $del{$pre_dpos};
-                        $pre_dlen = $dpos + $dlen - $pre_dpos;
-                        $pre_dpos = $dpos;
-                        next;
-                    }
-                    else{
-                        $del{$pre_dpos} = $dpos + $dlen - $pre_dpos;
-                        delete $del{$dpos};
-                        $pre_dlen = $dpos + $dlen - $pre_dpos;
-                        next;
-                    }
-                }
-                $pre_dpos = $dpos;
-                $pre_dlen = $dlen;
-            }
-            foreach my $dpos (sort {$a <=> $b} keys %del){
-                my $dlen = $del{$dpos};
-                if (($dlen / $len >= 0.67) and ($dlen / $len <= 1.5)){
-                    $del ++;
-                }
-            }
-        }
-        $sar = int ($del / ($read - $bp + $del) * 100 + 0.5) / 100 if ($read - $bp + $del > 0);
-    }
-    else{
+    elsif ($type =~ /INS/){
         if (($len == 0) and ($info =~ /BPLEN-(\d+)/)){
             $len = $1;
+            $end = $pos + $len - 1;
         }
-        my $pos2 = $pos + $len - 1;
-        my $start1 = $pos - $bp_diff;
-        my $end1 = $pos + $bp_diff;
-        my $start2 = $pos2 - $bp_diff;
-        my $end2 = $pos2 + $bp_diff;
-        my @sam1 = `samtools view $bam_file $target_chr:$start1-$end1 | awk \'\$5==0\'` if ($bam_file =~ /\.bam$/);
-        @sam1 = `samtools view --reference $ref_file $bam_file $target_chr:$start1-$end1 | awk \'\$5==0\'` if ($bam_file =~ /\.cram$/);
-        my @sam2 = `samtools view $bam_file $target_chr:$start2-$end2 | awk \'\$5==0\'` if ($bam_file =~ /\.bam$/);
-        @sam2 = `samtools view --reference $ref_file $bam_file $target_chr:$start2-$end2 | awk \'\$5==0\'` if ($bam_file =~ /\.cram$/);
-        my $bp1 = 0;
-        my $bp2 = 0;
-        foreach (@sam1){
-            my @sline = split (/\t/, $_);
-            my $spos = $sline[3];
-            my $cigar = $sline[5];
-            my $send = $spos;
-            my $count = 0;
-            while ($cigar =~ /(\d+)([SHMIDX=])/g){
-                my $sublen = $1;
-                my $tag = $2;
-                $count ++;
-                if (($tag =~ /S|H/) and ($count == 1)){
-                    if (($sublen >= $min_clip_len) and ($spos >= $start1) and ($spos <= $end1)){
-                        $bp1 ++ if ($type =~ /INS-BP|^DUP|INV/);
-                    }
-                    next;
-                }
-                if (($tag eq 'M') or ($tag eq '=')){
-                    $send += $sublen;
-                }
-                elsif ($tag eq 'D'){
-                    $send += $sublen;
-                }
-                elsif ($tag eq 'I'){
-                    next;
-                }
-                elsif ($tag eq 'X'){
-                    $send += $sublen;
-                }
-                elsif (($tag =~ /S|H/) and ($sublen >= $min_clip_len)){
-                    if (($send >= $start1) and ($send <= $end1)){
-                        $bp1 ++ if ($type =~ /DEL|INV/);
-                    }
-                }
-                last if ($send > $end1);
+    }
+    else{
+        $end = $pos + $len - 1;
+    }
+    ${$step2{$Mbin1}}{$pos} = $end;
+    ${${$step2_type{$Mbin1}}{$pos}}{$type} = $len;
+    my $Mbin2 = int ($end / $Mbin_size);
+    if ($Mbin2 > $Mbin1){
+        ${${$step2_type{$Mbin2}}{$pos}}{$type} = $len;
+        if (!exists ${$step2{$Mbin2}}{$pos}){
+            ${$step2{$Mbin2}}{$pos} = $end;
+        }
+        else{
+            my $end2 = ${$step2{$Mbin2}}{$pos};
+            if ($end > $end2){
+                ${$step2{$Mbin2}}{$pos} = $end;
             }
         }
-        foreach (@sam2){
-            my @sline = split (/\t/, $_);
-            my $spos = $sline[3];
-            my $cigar = $sline[5];
-            my $send = $spos;
-            my $count = 0;
-            while ($cigar =~ /(\d+)([SHMIDX=])/g){
-                my $sublen = $1;
-                my $tag = $2;
-                $count ++;
-                if (($tag =~ /S|H/) and ($count == 1)){
-                    if (($sublen >= $min_clip_len) and ($spos >= $start2) and ($spos <= $end2)){
-                        $bp2 ++ if ($type =~ /DEL|INV/);
+    }
+}
+close (FILE);
+
+open (FILE, "samtools view $bam_file $target_chr |") or die "$bam_file is not found:$!\n" if ($bam_file =~ /\.bam$/);
+open (FILE, "samtools view --reference $ref_file $bam_file $target_chr |") or die "$bam_file is not found:$!\n" if ($bam_file =~ /\.cram$/);
+while (my $sline = <FILE>){
+    chomp $sline;
+    my @sline = split (/\t/, $sline);
+    next if ($sline[4] != 0);
+    my $spos = $sline[3];
+    my $send = $spos;
+    my $cigar = $sline[5];
+    my $flag = 0;
+    my %hit_pos;
+    while ($cigar =~ /(\d+)([MD=])/g){
+        $send += $1;
+    }
+    my $Mbin1 = int ($spos / $Mbin_size);
+    my $Mbin2 = int ($send / $Mbin_size);
+    next if (!exists $step2{$Mbin1}) and (!exists $step2{$Mbin2});
+    foreach my $pos (sort {$a <=> $b} keys %{$step2{$Mbin1}}){
+        last if ($pos > $send);
+        my $end = ${$step2{$Mbin1}}{$pos};
+        next if ($end < $spos);
+        $hit_pos{$pos} = 1;
+        $flag = 1;
+    }
+    if (($flag == 0) and ($Mbin2 > $Mbin1)){
+        foreach my $pos (sort {$a <=> $b} keys %{$step2{$Mbin2}}){
+            last if ($pos > $send);
+            my $end = ${$step2{$Mbin2}}{$pos};
+            next if ($end < $spos);
+            $hit_pos{$pos} = 1;
+            $flag = 2;
+        }
+    }
+    next if ($flag == 0);
+    my $Mbin = $Mbin1;
+    $Mbin = $Mbin2 if ($flag == 2);
+    foreach my $pos (sort {$a <=> $b} keys %hit_pos){
+        foreach my $type (keys %{${$step2_type{$Mbin}}{$pos}}){
+            my $len = ${${$step2_type{$Mbin}}{$pos}}{$type};
+            my $sar = 0;
+            my $send2 = $spos;
+            my $cigar2 = $cigar;
+            if ($type =~ /TR/){
+                my $start = $pos - $bp_diff0;
+                my $end = $STR{$pos} + $bp_diff0;
+                my $type2 = 'INS' if ($type =~ /ins/);
+                $type2 = 'DEL' if ($type =~ /del/);
+                my $str_indel = 0;
+                my $str_bp = 0;
+                my %indel;
+                my $count = 0;
+                while ($cigar2 =~ /(\d+)([SHMIDX=])/g){
+                    my $sublen = $1;
+                    my $tag = $2;
+                    $count ++;
+                    if (($tag =~ /S|H/) and ($count == 1)){
+                        if (($sublen >= $min_clip_len) and ($spos >= $start) and ($spos <= $pos + $bp_diff0)){
+                            $str_bp ++ if ($type2 eq 'INS');
+                        }
+                        next;
                     }
-                    next;
+                    if (($tag eq 'M') or ($tag eq '=')){
+                        $send2 += $sublen;
+                    }
+                    elsif ($tag eq 'D'){
+                        $indel{$send2} = -$sublen if ($sublen >= $max_dist) and ($send2 >= $start) and ($send2 <= $end);
+                        $send2 += $sublen;
+                    }
+                    elsif ($tag eq 'I'){
+                        $indel{$send2} = $sublen if ($sublen >= $max_dist) and ($send2 >= $start) and ($send2 <= $end);
+                    }
+                    elsif ($tag eq 'X'){
+                        $send2 += $sublen;
+                    }
+                    elsif (($tag =~ /S|H/) and ($sublen >= $min_clip_len)){
+                        if (($send2 >= $end - $bp_diff * 2) and ($send2 <= $end)){
+                            $str_bp ++ if ($type2 eq 'INS');
+                        }
+                    }
+                    last if ($send2 > $end);
                 }
-                if (($tag eq 'M') or ($tag eq '=')){
-                    $send += $sublen;
+                my $sum_indel = 0;
+                foreach my $ipos (sort {$a <=> $b} keys %indel){
+                    $sum_indel += $indel{$ipos};
                 }
-                elsif ($tag eq 'D'){
-                    $send += $sublen;
-                }
-                elsif ($tag eq 'I'){
-                    next;
-                }
-                elsif ($tag eq 'X'){
-                    $send += $sublen;
-                }
-                elsif (($tag =~ /S|H/) and ($sublen >= $min_clip_len)){
-                    if (($send >= $start2) and ($send <= $end2)){
-                        $bp2 ++ if ($type =~ /INS-BP|^DUP|INV/);
+                if (($type2 eq 'DEL') and ($sum_indel < 0)){
+                    $sum_indel = 0 - $sum_indel;
+                    if (($sum_indel / $len >= 0.67) and ($sum_indel / $len <= 1.5)){
+                        $str_indel ++;
                     }
                 }
-                last if ($send > $end2);
+                elsif (($type2 eq 'INS') and ($sum_indel > 0)){
+                    if (($sum_indel / $len >= 0.67) and ($sum_indel / $len <= 1.5)){
+                        $str_indel ++;
+                    }
+                }
+                $str_indel += int ($str_bp * 0.5) if ($type2 eq 'INS');
+                ${$SAR{$pos}}{$type} += $str_indel;
+            }
+            elsif (($type =~ /INS/) and ($len > 0)){
+                my $start = $pos - $bp_diff2;
+                $start = $pos - $max_bp_diff if ($len >= 500);
+                my $end = $pos + $bp_diff2;
+                $end = $pos + $max_bp_diff if ($len >= 500);
+                my %ins;
+                my $ins = 0;
+                my $count = 0;
+                while ($cigar2 =~ /(\d+)([SHMIDX=])/g){
+                    my $sublen = $1;
+                    my $tag = $2;
+                    $count ++;
+                    if (($tag =~ /S|H/) and ($count == 1)){
+                        next;
+                    }
+                    if (($tag eq 'M') or ($tag eq '=')){
+                        $send2 += $sublen;
+                    }
+                    elsif ($tag eq 'D'){
+                        $send2 += $sublen;
+                    }
+                    elsif ($tag eq 'I'){
+                        $ins{$send2} = $sublen if ($sublen >= $max_dist) and ($send2 >= $start) and ($send2 <= $end);
+                    }
+                    elsif ($tag eq 'X'){
+                        $send2 += $sublen;
+                    }
+                    elsif (($tag =~ /S|H/) and ($count > 1)){
+                        next;
+                    }
+                    last if ($send2 > $end);
+                }
+                my $pre_ipos = 0;
+                my $pre_ilen = 0;
+                foreach my $ipos (sort {$a <=> $b} keys %ins){
+                    my $ilen = $ins{$ipos};
+                    my $distance = $ipos - $pre_ipos + 1;
+                    my $flag = 0;
+                    if (($pre_ipos > 0) and ($distance <= 50) and ($distance < $pre_ilen) and ($distance < $ilen)){
+                        $flag = 1;
+                    }
+                    elsif (($pre_ipos > 0) and ($distance <= 100) and ($distance < $pre_ilen * 0.2) and ($distance < $ilen * 0.2)){
+                        $flag = 1;
+                    }
+                    if ($flag == 1){
+                        if ($ilen >= $pre_ilen){
+                            $ins{$ipos} += $pre_ilen;
+                            delete $ins{$pre_ipos};
+                            $pre_ilen = $ilen + $pre_ilen;
+                            $pre_ipos = $ipos;
+                            next;
+                        }
+                        else{
+                            $ins{$pre_ipos} += $ilen;
+                            delete $ins{$ipos};
+                            $pre_ilen = $ilen + $pre_ilen;
+                            next;
+                        }
+                    }
+                    $pre_ipos = $ipos;
+                    $pre_ilen = $ilen;
+                }
+                foreach my $ipos (sort {$a <=> $b} keys %ins){
+                    my $ilen = $ins{$ipos};
+                    if (($ilen / $len >= 0.67) and ($ilen / $len <= 1.5)){
+                        $ins ++;
+                    }
+                }
+                ${$SAR{$pos}}{$type} += $ins;
+            }
+            elsif ($type eq 'DEL'){
+                my $start = $pos - $bp_diff2;
+                $start = int ($pos - $len * 0.5) if ($len >= 500);
+                my $end = $pos + $len + $bp_diff2;
+                $end = int ($pos + $len + $len * 0.5) if ($len >= 500);
+                my %del;
+                my $del = 0;
+                my $count = 0;
+                while ($cigar2 =~ /(\d+)([SHMIDX=])/g){
+                    my $sublen = $1;
+                    my $tag = $2;
+                    $count ++;
+                    if (($tag =~ /S|H/) and ($count == 1)){
+                        next;
+                    }
+                    if (($tag eq 'M') or ($tag eq '=')){
+                        $send2 += $sublen;
+                    }
+                    elsif ($tag eq 'D'){
+                        $del{$send2} = $sublen if ($sublen >= $max_dist) and ($send2 >= $start) and ($send2 <= $end);
+                        $send2 += $sublen;
+                    }
+                    elsif ($tag eq 'I'){
+                        next;
+                    }
+                    elsif ($tag eq 'X'){
+                        $send2 += $sublen;
+                    }
+                    elsif (($tag =~ /S|H/) and ($count > 1)){
+                        next;
+                    }
+                    last if ($send2 > $end);
+                }
+                my $pre_dpos = 0;
+                my $pre_dlen = 0;
+                foreach my $dpos (sort {$a <=> $b} keys %del){
+                    my $dlen = $del{$dpos};
+                    my $pre_dend = $pre_dpos + $dlen - 1;
+                    my $distance = $dpos - $pre_dend + 1;
+                    my $flag = 0;
+                    if (($pre_dpos > 0) and ($distance <= 500) and ($distance < $pre_dlen * 0.5) and ($distance < $dlen * 0.5)){
+                        $flag = 1;
+                    }
+                    if ($flag == 1){
+                        if ($dlen >= $pre_dlen){
+                            $del{$dpos} = $dpos + $dlen - $pre_dpos;
+                            delete $del{$pre_dpos};
+                            $pre_dlen = $dpos + $dlen - $pre_dpos;
+                            $pre_dpos = $dpos;
+                            next;
+                        }
+                        else{
+                            $del{$pre_dpos} = $dpos + $dlen - $pre_dpos;
+                            delete $del{$dpos};
+                            $pre_dlen = $dpos + $dlen - $pre_dpos;
+                            next;
+                        }
+                    }
+                    $pre_dpos = $dpos;
+                    $pre_dlen = $dlen;
+                }
+                foreach my $dpos (sort {$a <=> $b} keys %del){
+                    my $dlen = $del{$dpos};
+                    if (($dlen / $len >= 0.67) and ($dlen / $len <= 1.5)){
+                        $del ++;
+                    }
+                }
+                ${$SAR{$pos}}{$type} += $del;
+            }
+            else{
+                my $pos2 = $pos + $len - 1;
+                my $start1 = $pos - $bp_diff;
+                my $end1 = $pos + $bp_diff;
+                my $start2 = $pos2 - $bp_diff;
+                my $end2 = $pos2 + $bp_diff;
+                my $count = 0;
+                my $bp = 0;
+                while ($cigar2 =~ /(\d+)([SHMIDX=])/g){
+                    my $sublen = $1;
+                    my $tag = $2;
+                    $count ++;
+                    if (($tag =~ /S|H/) and ($count == 1) and ($type =~ /INS-BP|^DUP|INV/)){
+                        if (($sublen >= $min_clip_len) and ($spos >= $start1) and ($spos <= $end1)){
+                            $bp ++;
+                        }
+                        next;
+                    }
+                    elsif (($tag =~ /S|H/) and ($count == 1) and ($type =~ /DEL|INV/)){
+                        if (($sublen >= $min_clip_len) and ($spos >= $start2) and ($spos <= $end2)){
+                            $bp ++;
+                        }
+                        next;
+                    }
+                    elsif (($tag eq 'M') or ($tag eq '=')){
+                        $send2 += $sublen;
+                    }
+                    elsif ($tag eq 'D'){
+                        $send2 += $sublen;
+                    }
+                    elsif ($tag eq 'I'){
+                        next;
+                    }
+                    elsif ($tag eq 'X'){
+                        $send2 += $sublen;
+                    }
+                    elsif (($tag =~ /S|H/) and ($sublen >= $min_clip_len) and ($type =~ /DEL|INV/)){
+                        if (($send2 >= $start1) and ($send2 <= $end1)){
+                            $bp ++;
+                        }
+                    }
+                    elsif (($tag =~ /S|H/) and ($sublen >= $min_clip_len) and ($type =~ /INS-BP|^DUP|INV/)){
+                        if (($send2 >= $start2) and ($send2 <= $end2)){
+                            $bp ++;
+                        }
+                    }
+                    last if ($send2 > $end2);
+                }
+                ${$SAR{$pos}}{$type} += $bp;
             }
         }
-        $sar = int (($bp1 + $bp2) / ($read * 2 + $bp1 + $bp2) * 100 + 0.5) / 100;
+    }
+}
+close (FILE);
+
+my $step3_out = $step2_out . 2;
+open (OUT, "> $step3_out");
+open (FILE, $step2_out) or die "$step2_out is not found: $!\n";
+while (my $line = <FILE>){
+    chomp $line;
+    my ($chr, $pos, $type, $len, $info) = split (/\t/, $line);
+    next if (!defined $info);
+    my $read = $1 if ($info =~ /RN-(\d+)/);
+    my $bp = 0;
+    $bp = $1 if ($info =~ /BP-(\d+)/);
+    if ($info =~ /RN1-(\d+)/){
+        $read = $1;
+        if ($info =~ /RN2-(\d+)/){
+            $read += $1;
+            $read = int ($read * 0.5 + 0.5);
+        }
+    }
+    my $sar = 0;
+    if (exists ${$SAR{$pos}}{$type}){
+        my $var = ${$SAR{$pos}}{$type};
+        if ($type =~ /TR/){
+            $sar = int ($var / ($read + $var) * 100 + 0.5) / 100;
+        }
+        elsif (($type =~ /INS/) and ($len > 0)){
+            $sar = int ($var / ($read - $bp + $var) * 100 + 0.5) / 100 if ($read - $bp + $var > 0);
+        }
+        elsif ($type eq 'DEL'){
+            $sar = int ($var / ($read - $bp + $var) * 100 + 0.5) / 100 if ($read - $bp + $var> 0);
+        }
+        else{
+            $sar = int ($var / ($read * 2 + $var) * 100 + 0.5) / 100;
+        }
     }
     if ($line !~ /SAR-/){
         $line .= ";SAR-$sar";
@@ -526,6 +574,7 @@ while (my $line = <FILE>){
 }
 close (FILE);
 close (OUT);
+
 
 my $step2_wc = `wc -l $step2_out`;
 chomp $step2_wc;
@@ -541,5 +590,3 @@ else{
     system ("rm $step2_out");
     system ("mv $step3_out $step2_out");
 }
-
-
