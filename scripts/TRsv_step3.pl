@@ -5,7 +5,7 @@ use FindBin qw($Bin);
 
 my $data_dir = "$Bin/../Data";
 
-mmy $ref_file = '';
+my $ref_file = '';
 
 my $simple_repeat = '';
 
