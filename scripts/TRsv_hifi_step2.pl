@@ -1941,7 +1941,7 @@ sub find_me{
         next if ($me eq $skip_te);
         my $me_len = $TE_len{$me};
         next if ($ilen < 150) and ($me_len >= 1000);
-        next if ($ilen > $me_len * 3);
+#        next if ($ilen > $me_len * 3);
         my ($overlap, $cn, $direction, $query_cov) = &yass_align_me ($me, $read_seq, $chr, $pos);
         if ($overlap > 0){
             $te_type = $me;
@@ -2154,82 +2154,54 @@ sub yass_align_me{
     my @result = `yass -O 10 -m $max_mismatch $temp_dir/Z.$chr2.$me.fa $temp_dir/Z.$chr2-seq.fa 2>/dev/null`;
     my $me_len = $TE_len{$me};
     my $ins_len = length $insseq;
-    my $overlap_tlen = 0;
-    my $overlap_qlen = 0;
-    my $match_tpos1 = 0;
-    my $match_tpos2 = 0;
-    my $match_qpos1 = 0;
-    my $match_qpos2 = 0;
-    my %match_tpos;
-    my %match_qpos;
+    my $overlap_len = 0;
+    my $match_pos1 = 0;
+    my $match_pos2 = 0;
+    my %match_pos;
     my $match_flag = 0;
-    my $t_direction = 'F';
-    my $q_direction = 'F';
+    my $direction = 'F';
     my $indel_count = 0;
     my $min_me_coverage2 = $min_me_coverage;
     $min_me_coverage2 = 50 if ($ins_len < 150);
     my $cn = 0;
-    my $pre_tend = 0;
+    my $pre_end = 0;
     foreach my $line (@result){
         chomp $line;
         if (($line =~ /\*\((\d+)-(\d+)\)\((\d+)-(\d+)\)/) and ($match_flag == 0)){
             $match_flag = 1;
             if ($1 < $2){
-                $match_tpos1 = $1;
-                $match_tpos2 = $2;
+                $match_pos1 = $1;
+                $match_pos2 = $2;
             }
             else{
-                $match_tpos1 = $2;
-                $match_tpos2 = $1;
-                $t_direction = 'R';
+                $match_pos1 = $2;
+                $match_pos2 = $1;
+                $direction = 'R';
             }
-            if ($3 < $4){
-                $match_qpos1 = $3;
-                $match_qpos2 = $4;
-            }
-            else{
-                $match_qpos1 = $4;
-                $match_qpos2 = $3;
-                $q_direction = 'R';
-            }
-            $match_tpos{$match_tpos1} = $match_tpos2;
-            $match_qpos{$match_qpos1} = $match_qpos2;
-            $pre_tend = $match_tpos2;
+            $match_pos{$match_pos1} = $match_pos2;
+            $pre_end = $match_pos2;
         }
         elsif (($line =~ /\*\((\d+)-(\d+)\)\((\d+)-(\d+)\)/) and ($match_flag >= 1)){
-            my $tdir2 = 'F';
-            my $qdir2 = 'F';
+            my $dir2 = 'F';
             if ($1 < $2){
-                $match_tpos1 = $1;
-                $match_tpos2 = $2;
+                $match_pos1 = $1;
+                $match_pos2 = $2;
             }
             else{
-                $match_tpos1 = $2;
-                $match_tpos2 = $1;
-                $tdir2 = 'R';
+                $match_pos1 = $2;
+                $match_pos2 = $1;
+                $dir2 = 'R';
             }
-            if ($3 < $4){
-                $match_qpos1 = $3;
-                $match_qpos2 = $4;
+            if ((!exists $match_pos{$match_pos1}) and ($direction eq $dir2)){
+                $match_pos{$match_pos1} = $match_pos2;
             }
-            else{
-                $match_qpos1 = $4;
-                $match_qpos2 = $3;
-                $qdir2 = 'R';
-            }
-            if ((!exists $match_tpos{$match_tpos1}) and ($t_direction eq $tdir2)){
-                $match_tpos{$match_tpos1} = $match_tpos2;
-            }
-            if ((!exists $match_qpos{$match_qpos1}) and ($q_direction eq $qdir2)){
-                $match_qpos{$match_qpos1} = $match_qpos2;
-            }
-            if ($match_tpos1 < $pre_tend){
+            if ($match_pos1 < $pre_end){
                 $match_flag = 2;
             }
             else{
                 $match_flag = 1;
             }
-            $pre_tend = $match_tpos2 if ($match_tpos2 > $pre_tend);
+            $pre_end = $match_pos2 if ($match_pos2 > $pre_end);
         }
         elsif (($match_flag == 1) and ($line =~ /^[ACGTN\-]+$/)){
             if ($line =~ /\-{10,}/){
@@ -2241,8 +2213,8 @@ sub yass_align_me{
     }
     if ($match_flag >= 1){
         my $pre_end = 0;
-        foreach my $pos1 (sort {$a <=> $b} keys %match_tpos){
-            my $pos2 = $match_tpos{$pos1};
+        foreach my $pos1 (sort {$a <=> $b} keys %match_pos){
+            my $pos2 = $match_pos{$pos1};
             my $matchlen = $pos2 - $pos1 + 1;
             if ($pos2 <= $pre_end){
                 next;
@@ -2250,28 +2222,15 @@ sub yass_align_me{
             elsif ($pos1 < $pre_end){
                 $matchlen = $pos2 - $pre_end + 1;
             }
-            $overlap_tlen += $matchlen;
+            $overlap_len += $matchlen;
             $pre_end = $pos2;
         }
-        $pre_end = 0;
-        foreach my $pos1 (sort {$a <=> $b} keys %match_qpos){
-            my $pos2 = $match_qpos{$pos1};
-            my $matchlen = $pos2 - $pos1 + 1;
-            if ($pos2 <= $pre_end){
-                next;
-            }
-            elsif ($pos1 < $pre_end){
-                $matchlen = $pos2 - $pre_end + 1;
-            }
-            $overlap_qlen += $matchlen;
-            $pre_end = $pos2;
-        }
-        my $indelrate = int ($indel_count / $overlap_tlen * 1000 + 0.5) / 10;
-        my $coverage_query = int ($overlap_qlen / $ins_len * 1000 + 0.5) / 10;
-        my $coverage_me = int ($overlap_tlen / $me_len * 1000 + 0.5) / 10;
+        my $indelrate = int ($indel_count / $overlap_len * 1000 + 0.5) / 10;
+        my $coverage_query = int ($overlap_len / $ins_len * 1000 + 0.5) / 10;
+        my $coverage_me = int ($overlap_len / $me_len * 1000 + 0.5) / 10;
         if (($indelrate <= $indel_rate) and (($coverage_query >= $min_me_coverage2) or ($coverage_me >= $min_me_coverage2))){
-            $cn = int ($overlap_qlen / $me_len * 10 + 0.5) / 10;
-            return ($overlap_qlen, $cn, $t_direction, $coverage_query);
+            $cn = int ($overlap_len / $me_len * 10 + 0.5) / 10;
+            return ($overlap_len, $cn, $direction, $coverage_query);
         }
         else{
             return (0, 0, '', 0);
