@@ -200,6 +200,11 @@ pod2usage(-verbose => 0) if $help;
    --repeat_bed or -rep <STR>   simple/short repeat (STR/VNTR) bed file (TRsv-compatible format), which is automatically selected for human. [mandatory for non-human]
    --prefix or -p <STR>         output prefix [mandatory]
 
+   --skip or -sk <INT>          skip step-1~3 (1: skip step-1, 2: skip step-2, 3: skip step-3, 12: skip steps-1 and -2, 123: skip steps-1, -2, and -3) [default: 0]
+   --non_human or -nh <BOOLEAN> sample is a non-human species [default: false]
+   --build <STR>                reference build (37|38|T2T) when using human sample [default: 37]
+   --thread or -n <INT>         number of threads [default: 1]
+
    --conf or -c <STR>           configure file specifying options. The specified options in conf file override separately specified options. [optional]
    --repeat_u or -reu <STR>     simple/short repeat (STR/VNTR) bed file of TRs (i.e., > 10 Kb TRs) not ppresent in the file specified with --repeat, which is automatically selected for human. [optional]
    --lowconf_tr or -lcs <STR>   list file of TR IDs in the TR file specified with --repeat_u whose TR regions could cause low-confident TR-CNV calling, which is automatically selected for human.
@@ -218,10 +223,6 @@ pod2usage(-verbose => 0) if $help;
    --min_tr_vrr or -msv <FLOAT> minimum VRR (variant rate to read depth) for TR-CNVs [default: 0.15]
    --min_mapq or -mq <INT>      minimum mapping quality [default: 1]
    --incl_sec or -insec <BOOLEAN> include secondary alignments [default: false]
-   --skip or -sk <INT>          skip step-1~3 (1: skip step-1, 2: skip step-2, 3: skip step-3, 12: skip steps-1 and -2, 123: skip steps-1, -2, and -3) [default: 0]
-   --non_human or -nh <BOOLEAN> sample is a non-human species [default: false]
-   --build <STR>                reference build (37|38|T2T) when using human sample [default: 37]
-   --thread or -n <INT>         number of threads [default: 1]
 
    --r_path or -rp <STR>        path of R (>= v3.5), where xgboost library has been installed if the corresponding R is not set in $PATH
    --samtool_path or -sp <STR>  path of samtools (${samtool_path}/samtools) if the corresponding path is not set in $PATH
@@ -1241,7 +1242,10 @@ foreach my $chr (sort keys %sv){
                 if (($type eq 'INS') and ($inf =~ /BPLEN2-(\d+)/)){
                     $bplen2 = $1;
                 }
-                if ($inf =~ /MEI-(.+),MEILEN-(\d+),MEICN-(\d+)/){
+                if ($inf =~ /MEI-(.+),MEILEN-(\d+),MEICN-(\d+),MEI2-(\w+-\d+)/){
+                    $MEI{$1} = "MEILEN=$2;MEICN=$3;MEI2=$4";
+                }
+                elsif ($inf =~ /MEI-(.+),MEILEN-(\d+),MEICN-(\d+)/){
                     $MEI{$1} = "MEILEN=$2;MEICN=$3";
                 }
                 if ($type eq 'INV'){
@@ -3065,6 +3069,7 @@ print OUT "##INFO=<ID=TRALEN,Number=1,Type=Integer,Description=\"Length of trans
 print OUT "##INFO=<ID=MEI,Number=1,Type=String,Description=\"Type of mobile element found in INS\">\n";
 print OUT "##INFO=<ID=MEILEN,Number=1,Type=Integer,Description=\"Length of mobile element found in INS\">\n";
 print OUT "##INFO=<ID=MEICN,Number=1,Type=Integer,Description=\"Extra copy numver of mobile element found in INS\">\n";
+print OUT "##INFO=<ID=MEI2,Number=1,Type=String,Description=\"Secondary mobile element found in INS with its match length\">\n";
 print OUT "##INFO=<ID=TRID,Number=1,Type=String,Description=\"TR ID containing TR-CNV\">\n";
 print OUT "##INFO=<ID=TREND,Number=1,Type=Integer,Description=\"END position of TR-ID\">\n";
 print OUT "##INFO=<ID=TRULEN,Number=1,Type=Integer,Description=\"Length of repeat unit of TR-ID\">\n";
@@ -3115,6 +3120,7 @@ if ($filt_flag == 1){
     print OUTF "##INFO=<ID=MEI,Number=1,Type=String,Description=\"Type of mobile element found in INS\">\n";
     print OUTF "##INFO=<ID=MEILEN,Number=1,Type=Integer,Description=\"Length of mobile element found in INS\">\n";
     print OUTF "##INFO=<ID=MEICN,Number=1,Type=Integer,Description=\"Extra copy numver of mobile element found in INS\">\n";
+    print OUTF "##INFO=<ID=MEI2,Number=1,Type=String,Description=\"Secondary mobile element found in INS with its match length\">\n";
     print OUTF "##INFO=<ID=TRID,Number=1,Type=String,Description=\"TR ID containing TR-CNV\">\n";
     print OUTF "##INFO=<ID=TREND,Number=1,Type=Integer,Description=\"END position of TR-ID\">\n";
     print OUTF "##INFO=<ID=TRULEN,Number=1,Type=Integer,Description=\"Length of repeat unit of TR-ID\">\n";
