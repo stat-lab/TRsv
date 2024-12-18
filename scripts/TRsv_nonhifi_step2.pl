@@ -2331,7 +2331,7 @@ sub yass_align_me{
         my $mmrate = int ($mismatch_count / $overlap_tlen * 1000 + 0.5) / 10;
         my $coverage_query = int ($overlap_qlen / $ins_len * 1000 + 0.5) / 10;
         my $coverage_me = int ($overlap_tlen / $me_len * 1000 + 0.5) / 10;
-        if (($mmrate <= $max_mismatch2) and (($coverage_query >= $min_me_coverage2) or ($coverage_me >= $min_me_coverage2))){
+        if (($mmrate <= $max_mismatch) and (($coverage_query >= $min_me_coverage2) or ($coverage_me >= $min_me_coverage2))){
             $cn = int ($overlap_qlen / $me_len * 10 + 0.5) / 10;
             return ($overlap_qlen, $cn, $coverage_me, $coverage_query);
         }

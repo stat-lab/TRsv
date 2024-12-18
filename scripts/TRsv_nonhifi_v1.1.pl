@@ -1930,6 +1930,9 @@ foreach my $chr (sort keys %str_sv){            # merge and delete non-TR-INSs w
             next if (!exists ${${$sv2{$chr}}{$ipos}}{$type});
             my $iline = ${${$sv2{$chr}}{$ipos}}{$type};
             next if ($iline =~ /TRID=/);
+            next if ($iline =~ /TRUNIT=/);
+            next if ($iline =~ /DUPLEN=/);
+            next if ($iline =~ /MEI=/);
             my $iread = $1 if ($iline =~ /READS=(\d+)/);
             my $ivrr = $1 if ($iline =~ /VRR=([\d\.]+)/);
             my $iend2 = $ipos;

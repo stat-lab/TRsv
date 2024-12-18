@@ -41,7 +41,7 @@ my $chromium = 0;
 
 my $include_secalign = 0;
 
-my $max_mismatch = 15;
+my $max_mismatch = 18;
 
 my $min_indel_size = 50;
 my $min_str_indel_size = 50;

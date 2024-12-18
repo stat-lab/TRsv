@@ -69,7 +69,7 @@ my $chromium = 0;
 
 my $include_secalign = 0;
 
-my $max_mismatch = 15;
+my $max_mismatch = 18;
 
 my $min_indel_size = 50;
 my $min_str_indel_size = 0;
@@ -219,7 +219,7 @@ pod2usage(-verbose => 0) if $help;
    --min_tr_ident or -msi <INT> minimum identity (%) of TR-INS sequence with TR motif [default: 70]
    --max_dpf or -xd <FLOAT>     maximum fold of mean read depth to consider SV calling (not call in high-depth regions with specified value x mean depth) [default: 15]
    --max_sar or -sar <FLOAT>    maximum rate of SVs supported by alignments with maping quality 0, including secondary alignmnents (SVs exceeding this value are marked as 'LowQual' in the FILTER field) [default: 0.7]
-   --max_mismatch or -xm <INT>  maximum percentage of mismatch for yass aligner to search INS homology to TE or flanking regions [default: 15]
+   --max_mismatch or -xm <INT>  maximum percentage of mismatch for yass aligner to search INS homology to TE or flanking regions [default: 18]
    --max_indel or -xi <INT>     maximum percentage of indel for yass aligner to search INS homology to TE or flanking regions [default: 10]
    --targeted or -t <BOOLEAN>   the data is targeted sequencing data [default: false]
    --help or -h                 output help message
@@ -1843,6 +1843,9 @@ foreach my $chr (sort keys %str_sv){            # merge and delete non-TR-INSs w
             next if (!exists ${${$sv2{$chr}}{$ipos}}{$type});
             my $iline = ${${$sv2{$chr}}{$ipos}}{$type};
             next if ($iline =~ /TRID=/);
+            next if ($iline =~ /TRUNIT=/);
+            next if ($iline =~ /DUPLEN=/);
+            next if ($iline =~ /MEI=/);
             my $iread = $1 if ($iline =~ /READS=(\d+)/);
             my $ivrr = $1 if ($iline =~ /VRR=([\d\.]+)/);
             my $iend2 = $ipos;
