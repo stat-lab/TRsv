@@ -21,7 +21,7 @@ my $min_str_len = 0;
 my $ins_sd = 150;
 
 my $min_overlap_ratio = 0.5;
-my $min_overlap_ratio2 = 0.7;
+my $min_overlap_ratio2 = 0.8;
 
 my $max_SAR = 0.6;
 
@@ -58,7 +58,7 @@ GetOptions(
     'min_slen|msl=i' => \$min_str_len,
     'max_sar|sar=f' => \$max_SAR,
     'ins_sd|is=i' => \$ins_sd,
-    'overlap_rate|or=f' => \$min_overlap_ratio,
+    'overlap_rate|or=f' => \$min_overlap_ratio2,
     'help' => \$help
 ) or pod2usage(-verbose => 0);
 pod2usage(-verbose => 0) if $help;
@@ -83,7 +83,7 @@ pod2usage(-verbose => 0) if $help;
    --min_slen or -msl <INT> minimum len (bp) of TR-CNV [default: N spcified with -ml]
    --max_sar or -sar <FLOAT> maximum rate of SVs supported by alignments with maping quality 0, including secondary alignmnents (SVs exceeding this value are marked as 'LowQual' in the FILTER field) [default: 0.6]
    --ins_sd or -is <INT>    maximum distance (bp) between proximal INS breakpoints to be merged [default: 200]
-   --overlap_rate or -or <FLOAT>  minimum reciprocal overlap rate for merging overlapped DELs, DUPs, or INVs [default: 0.5]
+   --overlap_rate or -or <FLOAT>  minimum reciprocal overlap rate for merging overlapped DELs, DUPs, or INVs [default: 0.8]
    --help or -h             output help message
    
 =cut
@@ -864,7 +864,7 @@ foreach my $type (keys %call_cons){		# merge neighboring consensus pos with < 20
 						$overlap = $end2 - $pos + 1;
 						$overlap = $len2 if ($pos2 > $pos);
 					}
-					if (($overlap >= $len * $min_overlap_ratio) and ($overlap >= $len2 * $min_overlap_ratio)){
+					if (($overlap >= $len * $min_overlap_ratio2) and ($overlap >= $len2 * $min_overlap_ratio2)){
 						if ($len >= $len2){
 						    $ovlrate = $len2 / $len;
 						}
@@ -1127,81 +1127,7 @@ foreach my $type (keys %call_cons){		# merge neighboring consensus pos with < 20
 				    }
 				}
 				if ($overlap_flag == 0){
-				    my %pos;
-				    my $sum_pos = 0;;
-				    my $top_pos1 = 0;
-				    my $top_pos2 = 0;
-				    my $pos1_freq = 0;
-				    my $pos2_freq = 0;
-				    my $select_pos = 0;
-				    my $sum_len2 = 0;
-				    my $sum_len_num = 0;
-				    my $ave_len2 = 0;
-				    my $total_num = @cur_info + @pre_info;
-				    delete ${${$call_cons{$type}}{$chr}}{$pos};
-				    delete ${${$call_cons_len{$type}}{$chr}}{$pos};
-				    map {delete ${${$call_cons{$type}}{$chr}}{$_}} @pre_pos;
-				    map {delete ${${$call_cons_len{$type}}{$chr}}{$_}} @pre_pos;
-				    map {delete $pre_info{$_}} @pre_pos;
-					
-				    foreach (@cur_info){
-						my ($id, $bp, $len) = split (/==/, $_);
-						$pos{$bp} ++;
-						$sum_pos += $bp;
-						$sum_len2 += $len if ($len >= $min_sv_len);
-						$sum_len_num ++ if ($len >= $min_sv_len);
-				    }
-				    foreach (@pre_info){
-						my ($id, $bp, $len) = split (/==/, $_);
-						$pos{$bp} ++;
-						$sum_pos += $bp;
-						$sum_len2 += $len if ($len >= $min_sv_len);
-						$sum_len_num ++ if ($len >= $min_sv_len);
-				    }
-				    $ave_len2 = int ($sum_len2 / $sum_len_num) if ($sum_len_num > 0);
-				    
-				    foreach my $pos2 (sort {$pos{$b} <=> $pos{$a}} keys %pos){
-						$top_pos2 = $pos2 if ($top_pos1 > 0) and ($top_pos2 == 0);
-						$pos2_freq = $pos{$pos2} if ($pos1_freq > 0) and ($pos2_freq == 0);
-						$top_pos1 = $pos2 if ($top_pos1 == 0);
-						$pos1_freq = $pos{$pos2} if ($pos1_freq == 0);
-						last if ($top_pos2 > 0);
-				    }
-				    if ($total_num == 2){
-						$select_pos = int (($top_pos1 + $top_pos2) / 2 + 0.5);
-				    }
-				    elsif ($total_num == 3){
-						if ($pos1_freq >= 2){
-						    $select_pos = $top_pos1;
-						}
-						else{
-						    $select_pos = int ($sum_pos / 3 + 0.5);
-						}
-				    }
-				    else{
-						if (($pos1_freq >= 2) and ($pos1_freq >= $pos2_freq * 2)){
-						    $select_pos = $top_pos1;
-						}
-						elsif ($pos2_freq >= 2){
-						    $select_pos = int (($top_pos1 + $top_pos2) / 2 + 0.5);
-						}
-						else{
-						    $select_pos = int ($sum_pos / $total_num + 0.5);
-						}
-				    }
-                    if (exists ${${$call_cons{$type}}{$chr}}{$select_pos}){
-                        while (1){
-                            $select_pos += 10;
-                            last if (!exists ${${$call_cons{$type}}{$chr}}{$select_pos});
-                        }
-                    }
-				    push @{${${$call_cons{$type}}{$chr}}{$select_pos}}, @pre_info;
-				    push @{${${$call_cons{$type}}{$chr}}{$select_pos}}, @cur_info;
-				    ${${$call_cons_len{$type}}{$chr}}{$select_pos} = $ave_len2;
-				    map {${${$used_pos{$type}}{$chr}}{$_} = 1} @pre_pos;
-				    ${${$used_pos{$type}}{$chr}}{$pos} = 1;
-				    delete ${${$used_pos{$type}}{$chr}}{$select_pos} if (exists ${${$used_pos{$type}}{$chr}}{$select_pos});
-				    $pre_info{$select_pos} = $ave_len2;
+					map {delete $pre_info{$_}} @pre_pos;
 				}
 		    }
 		    else{
@@ -1873,7 +1799,7 @@ if (($ave_call > 100000) or ($total_sample_num >= 1000)){     # merge overlappin
 		                        my $overlap = $end1 - $pos2 + 1;
 		                        $overlap = $len2 if ($end2 < $end1);
 		                        my $ovl_flag = 0;
-		                        if (($overlap >= $len1 * $min_overlap_ratio) and ($overlap >= $len2 * $min_overlap_ratio)){
+		                        if (($overlap >= $len1 * $min_overlap_ratio2) and ($overlap >= $len2 * $min_overlap_ratio2)){
 		                        	$ovl_flag = 1;
 		                        }
 		                        elsif (($overlap > 0) and ($len1 <= 10) and ($len2 <= 10) and ($lenrate <= 2) and ($lenrate >= 0.5)){
@@ -2055,7 +1981,7 @@ else{
 	                        my $overlap = $end1 - $pos2 + 1;
 	                        $overlap = $len2 if ($end2 < $end1);
 	                        my $ovl_flag = 0;
-	                        if (($overlap >= $len1 * $min_overlap_ratio) and ($overlap >= $len2 * $min_overlap_ratio)){
+	                        if (($overlap >= $len1 * $min_overlap_ratio2) and ($overlap >= $len2 * $min_overlap_ratio2)){
 	                        	$ovl_flag = 1;
 	                        }
 	                        elsif (($overlap > 0) and ($len1 <= 10) and ($len2 <= 10) and ($lenrate <= 2) and ($lenrate >= 0.5)){
