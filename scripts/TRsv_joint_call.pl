@@ -1127,7 +1127,81 @@ foreach my $type (keys %call_cons){		# merge neighboring consensus pos with < 20
 				    }
 				}
 				if ($overlap_flag == 0){
-					map {delete $pre_info{$_}} @pre_pos;
+				    my %pos;
+				    my $sum_pos = 0;;
+				    my $top_pos1 = 0;
+				    my $top_pos2 = 0;
+				    my $pos1_freq = 0;
+				    my $pos2_freq = 0;
+				    my $select_pos = 0;
+				    my $sum_len2 = 0;
+				    my $sum_len_num = 0;
+				    my $ave_len2 = 0;
+				    my $total_num = @cur_info + @pre_info;
+				    delete ${${$call_cons{$type}}{$chr}}{$pos};
+				    delete ${${$call_cons_len{$type}}{$chr}}{$pos};
+				    map {delete ${${$call_cons{$type}}{$chr}}{$_}} @pre_pos;
+				    map {delete ${${$call_cons_len{$type}}{$chr}}{$_}} @pre_pos;
+				    map {delete $pre_info{$_}} @pre_pos;
+					
+				    foreach (@cur_info){
+						my ($id, $bp, $len) = split (/==/, $_);
+						$pos{$bp} ++;
+						$sum_pos += $bp;
+						$sum_len2 += $len if ($len >= $min_sv_len);
+						$sum_len_num ++ if ($len >= $min_sv_len);
+				    }
+				    foreach (@pre_info){
+						my ($id, $bp, $len) = split (/==/, $_);
+						$pos{$bp} ++;
+						$sum_pos += $bp;
+						$sum_len2 += $len if ($len >= $min_sv_len);
+						$sum_len_num ++ if ($len >= $min_sv_len);
+				    }
+				    $ave_len2 = int ($sum_len2 / $sum_len_num) if ($sum_len_num > 0);
+				    
+				    foreach my $pos2 (sort {$pos{$b} <=> $pos{$a}} keys %pos){
+						$top_pos2 = $pos2 if ($top_pos1 > 0) and ($top_pos2 == 0);
+						$pos2_freq = $pos{$pos2} if ($pos1_freq > 0) and ($pos2_freq == 0);
+						$top_pos1 = $pos2 if ($top_pos1 == 0);
+						$pos1_freq = $pos{$pos2} if ($pos1_freq == 0);
+						last if ($top_pos2 > 0);
+				    }
+				    if ($total_num == 2){
+						$select_pos = int (($top_pos1 + $top_pos2) / 2 + 0.5);
+				    }
+				    elsif ($total_num == 3){
+						if ($pos1_freq >= 2){
+						    $select_pos = $top_pos1;
+						}
+						else{
+						    $select_pos = int ($sum_pos / 3 + 0.5);
+						}
+				    }
+				    else{
+						if (($pos1_freq >= 2) and ($pos1_freq >= $pos2_freq * 2)){
+						    $select_pos = $top_pos1;
+						}
+						elsif ($pos2_freq >= 2){
+						    $select_pos = int (($top_pos1 + $top_pos2) / 2 + 0.5);
+						}
+						else{
+						    $select_pos = int ($sum_pos / $total_num + 0.5);
+						}
+				    }
+                    if (exists ${${$call_cons{$type}}{$chr}}{$select_pos}){
+                        while (1){
+                            $select_pos += 10;
+                            last if (!exists ${${$call_cons{$type}}{$chr}}{$select_pos});
+                        }
+                    }
+				    push @{${${$call_cons{$type}}{$chr}}{$select_pos}}, @pre_info;
+				    push @{${${$call_cons{$type}}{$chr}}{$select_pos}}, @cur_info;
+				    ${${$call_cons_len{$type}}{$chr}}{$select_pos} = $ave_len2;
+				    map {${${$used_pos{$type}}{$chr}}{$_} = 1} @pre_pos;
+				    ${${$used_pos{$type}}{$chr}}{$pos} = 1;
+				    delete ${${$used_pos{$type}}{$chr}}{$select_pos} if (exists ${${$used_pos{$type}}{$chr}}{$select_pos});
+				    $pre_info{$select_pos} = $ave_len2;
 				}
 		    }
 		    else{
