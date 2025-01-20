@@ -36,7 +36,7 @@ my $yass_path = '';
 my $trf_path = '';
 my $multalin_path = '';
 
-print "# $0 @ARGV\n";
+#print "# $0 @ARGV\n";
 
 my $command = $0;
 my @Arg = (@ARGV);

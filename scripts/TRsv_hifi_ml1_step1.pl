@@ -471,10 +471,12 @@ while (my $line = <FILE>){
             }
             elsif ($tag eq 'I'){
                 my $end2 = int ($end / 10 + 0.5) * 10;
-                push @{$bam_ins_Q0{$end2}}, "$read_id=$strand=$sublen=$read_pos" if ($sublen >= 1000);
+                push @{$bam_ins_Q0{$end2}}, "$read_id=$strand=$sublen=$read_pos=$end" if ($sublen >= 1000);
                 $read_pos += $sublen;
             }
         }
+        $read_align5{$read_id} = $pos;
+        $read_align3{$read_id} = $end;
         next;
     }
     my $sublen_5S = 0;
