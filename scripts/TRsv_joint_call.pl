@@ -3499,10 +3499,8 @@ if ($non_human == 0){
 	print OUT "##reference=CHM13\n" if ($build eq 'T2T');
 }
 else{
-	my $ref = $ref_index;
-	$ref = $1 if ($ref_index =~ /\/(.+?)$/);
 	my $ref = basename ($ref_index);
-	$ref = $1 if ($ref_index =~ /(.+)\.fas*t*a*/);
+	$ref = $1 if ($ref =~ /(.+)\.fas*t*a*/);
 	print OUT "##reference=$ref\n";
 }
 print OUT "##INFO=<ID=SVTYPE,Number=1,Type=String,Description=\"Type of tandem repeat expansion/contraction (TR-CNV) and structural variation (SV)\">\n";
