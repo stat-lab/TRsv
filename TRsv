@@ -87,6 +87,7 @@ if ($command eq 'call'){
 }
 elsif ($command eq 'joint_call'){
     $script = "$script_dir/TRsv_joint_call.pl";
+    die "Error: The -n or --thread_num option is not effective for joint call !!\n" if ($args =~ /-n\s+\d+/);
 }
 elsif ($command eq 'annotate'){
     $script = "$script_dir/TRsv_annotate.pl";
