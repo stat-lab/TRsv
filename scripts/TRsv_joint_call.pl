@@ -2310,7 +2310,7 @@ foreach my $chr (sort keys %vcf_cons){
 				$bp{$id} = $bp;
 				my $inslen = 0;
 				$inslen = $1 if ($inf2 =~ /INSLEN=(\d+)/);
-				$inslen{$id} = $inslen;
+				$inslen{$id} = $inslen if ($inslen > 0);;
 				if ($inf2 =~ /MEI=(.+?);/){
 					$mei{$1} ++;
 				}
@@ -2395,7 +2395,7 @@ foreach my $chr (sort keys %vcf_cons){
 			foreach my $id (keys %pos){
 				my $pos2 = $pos{$id};
 				my $len2 = $len{$id};
-				$len2 = $inslen{$id} if ($type eq 'DUP');
+				$len2 = $inslen{$id} if ($type eq 'DUP') and (exists $inslen{$id});
 				my $gt = $gt{$id};
 				my $read = $read{$id};
 				my $vrr = $vrr{$id};
