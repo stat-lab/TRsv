@@ -14,7 +14,7 @@ R 3.5 or later (required library: [xgboost, Matrix, data.table, jsonlite, and la
 [YASS](https://bioinfo.univ-lille.fr/yass/)  
 [TRF](https://github.com/Benson-Genomics-Lab/TRF)  
 [MultAlin](http://lipm-bioinfo.toulouse.inrae.fr/download/multalin/)  
-The above executables, perl, R, samtools, minimap2, yass, trf, and multalin must be set to PATH.  
+The above install directories must be set to PATH to execute perl, R, samtools, minimap2, yass, trf, and multalin.   
 - Tip for multalin installation  
   ```
   gzip -dc multalin.5.4.1.dynamic.sources.tar.gz | tar xvf -
