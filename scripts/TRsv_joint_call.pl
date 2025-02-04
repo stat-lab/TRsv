@@ -2579,10 +2579,12 @@ foreach my $chr (sort keys %vcf_cons){
 				$new_line .= ";END=$end";
 			}
 			elsif ($type eq 'DUP'){
+				$end = $pos + $len - 1 if ($end < $pos);
 				$new_line = "$chr2\t$pos\t.\t.\t<$alt>\t.\tPASS\tSVTYPE=$type;SVLEN=$len;END=$end";
 				$new_line = "$chr2\t$pos\t.\t.\t<$alt>\t.\tPASS\tSVTYPE=$type;SVLEN=$len;SAR=$ave_sar;END=$end" if (@sar > 0);
 			}
 			else{
+				$end = $pos + $med_len - 1 if ($end < $pos);
 				$new_line = "$chr2\t$pos\t.\t.\t<$alt>\t.\tPASS\tSVTYPE=$type;SVLEN=$med_len;END=$end";
 				$new_line = "$chr2\t$pos\t.\t.\t<$alt>\t.\tPASS\tSVTYPE=$type;SVLEN=$med_len;SAR=$ave_sar;END=$end" if (@sar > 0);
 			}
