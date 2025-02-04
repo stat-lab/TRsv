@@ -12,8 +12,20 @@ R 3.5 or later (required library: [xgboost, Matrix, data.table, jsonlite, and la
 [Samtools](https://github.com/samtools/samtools)  
 [Minimap2](https://github.com/lh3/minimap2)  
 [YASS](https://bioinfo.univ-lille.fr/yass/)  
-[MultAlin](http://lipm-bioinfo.toulouse.inrae.fr/download/multalin/)  
 [TRF](https://github.com/Benson-Genomics-Lab/TRF)  
+[MultAlin](http://lipm-bioinfo.toulouse.inrae.fr/download/multalin/)  
+  [Tip for multalin installation]  
+  ```
+  gzip -dc multalin.5.4.1.dynamic.sources.tar.gz | tar xvf -
+  cd multalin.5.4.1
+  cd src
+  cmake .
+  make
+  cd ../
+  ln -s src/multalin
+  export PATH=$PWD:$PATH (setenv PATH $PWD:$PATH # for csh shell)
+  export MULTALIN=$PWD (or export MULTALIN=$PWD/matrix) (setenv MULTALIN $PWD # for csh shell)
+  ```
 
 #### Input file
 - Alignment bam/cram file & its index file for PacBio HiFi, PacBio CLR or ONT Nanopore long reads  
