@@ -19,8 +19,6 @@ my $help;
 
 my $script_dir = "$Bin/scripts";
 
-my $tool_test_dir = "$Bin/tool_test";
-
 my $script = '';
 
 my $out_prefix = '';
@@ -125,64 +123,6 @@ if ($args =~ /-h$|-h\s|-help/){
     system ($command2);
 }
 else{
-    if ($command eq 'call'){
-        my $path = `echo $ENV{PATH}`;
-        my @path = split (/:/, $path);
-        my $yass_path = 0;
-        my $trf_path = 0;
-        my $multalin_path = 0;
-        my $samtool_path = 0;
-        my $minimap2_path = 0;
-        foreach my $dir (@path){
-            my $yass = "$dir/yass";
-            my $trf = "$dir/trf";
-            my $multalin = "$dir/multalin";
-            my $samtool = "$dir/samtools";
-            my $minimap2 = "$dir/minimap2";
-            $yass_path = 1 if (-f $yass);
-            $trf_path = 1 if (-f $trf);
-            $multalin_path = 1 if (-f $multalin);
-            $samtool_path = 1 if (-f $samtool);
-            $minimap2_path = 1 if (-f $minimap2);
-        }
-        if ($samtool_path == 0){
-            die "samtools is not set to PATH\n";
-        }
-        if ($minimap2_path == 0){
-            die "minimap2 is not set to PATH\n";
-        }
-        if ($yass_path == 0){
-            die "yass is not set to PATH\n";
-        }
-        if ($trf_path == 0){
-            die "trf is not set to PATH\n";
-        }
-        if ($multalin_path == 0){
-            die "multalin is not set to PATH\n";
-        }
-        my @yass_result = ();
-        my @trf_result = ();
-        system ("rm -f $tool_test_dir/multalin_test.cl2") if (-f "$tool_test_dir/multalin_test.cl2");
-        system ("rm -f $tool_test_dir/multalin_test.msf") if (-f "$tool_test_dir/multalin_test.msf");
-        @yass_result = `yass -O 20 -m 10 -i 10 $tool_test_dir/test1.fasta $tool_test_dir/test2.fasta 2>/dev/null`;
-        @trf_result = `trf $tool_test_dir/test1.fasta 2 7 7 80 10 50 2000 -d -l 1 -h -ngs`;
-        my @multalin_result = `multalin -q $tool_test_dir/multalin_test.fasta`;
-        if (@yass_result < 20){
-            die "yass seems not to be properly installed:\n";
-        }
-        if (@trf_result < 2){
-            die "trf seems not to be properly installed:\n";
-        }
-        foreach (@multalin_result){
-            chomp $_;
-            if ($_ =~ /Error/){
-                die "multalin seems not to be properly installed or MULTALIN environment variable is not set:\n";
-            }
-        }
-        if (!-f "$tool_test_dir/multalin_test.msf"){
-            die "multalin seems not to be properly installed or MULTALIN environment variable is not set:\n";
-        }
-    }
     my $command2 = "$script $args";
 
     my $command_log = "$out_prefix.command.log";
