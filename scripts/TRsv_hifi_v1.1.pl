@@ -30,6 +30,7 @@ my $TE_fasta = '';
 my $gap_bed = '';
 
 my $samtool_path = '';
+my $minimap2_path = '';
 my $yass_path = '';
 my $trf_path = '';
 my $multalin_path = '';
@@ -162,6 +163,7 @@ GetOptions(
     'non_human|nh' => \$non_human,
     'build=s' => \$build,
     'samtool_path|sp=s' => \$samtool_path,
+    'minimap2_path|mmp=s' => \$minimap2_path,
     'trf_path|tp=s' => \$trf_path,
     'yass_path|yp=s' => $yass_path,
     'multalin_path|mp=s' => \$multalin_path,
@@ -205,6 +207,7 @@ pod2usage(-verbose => 0) if $help;
    --incl_sec or -insec <BOOLEAN> include secondary alignments [default: false]
 
    --samtool_path or -sp <STR>  path of samtools (${samtool_path}/samtools) if the corresponding path is not set in $PATH
+   --minimap2_path or -mmp <STR>path of minimap2 (${minimap2_path}/minimap2) if the corresponding path is not set in $PATH
    --trf_path or -tp <STR>      path of trf (${trf_path}/trf) if the corresponding path is not set in $PATH
    --yass_path or -yp <STR>     path of yass (${yass_path}/yass) if the corresponding path is not set in $PATH
    --multalin_path or -mp <STR> path of multalin (${multalin_path}/multalin) if the corresponding path is not set in $PATH
@@ -333,6 +336,9 @@ if ($conf_file ne ''){
         elsif ($arg eq 'samtool_path'){
             $samtool_path = $value;
         }
+        elsif ($arg eq 'minimap2_path'){
+            $minimap2_path = $value;
+        }
         elsif ($arg eq 'trf_path'){
             $trf_path = $value;
         }
@@ -366,6 +372,19 @@ else{
     }
     $ENV{PATH} = "$samtool_path:" . $ENV{PATH};
 }
+if ($minimap2_path eq ''){
+    my $Mpath = `which minimap2`;
+    chomp $Mpath;
+    if (($Mpath =~ /\s/) or (!-f $Mpath)){
+        die "minimap2 path is not specified with --minimap2_path or not in PATH:\n";
+    }
+}
+else{
+    if (!-f "$minimap2_path/minimap2"){
+        die "minimap2 does not exist in the specified path: $minimap2_path:\n";
+    }
+    $ENV{PATH} = "$minimap2_path:" . $ENV{PATH};
+}
 if ($trf_path eq ''){
     my $Tpath = `which trf`;
     chomp $Tpath;
@@ -374,7 +393,7 @@ if ($trf_path eq ''){
     }
 }
 else{
-    if (!-f "$samtool_path/samtools"){
+    if (!-f "$trf_path/trf"){
         die "trf does not exist in the specified path: $trf_path:\n";
     }
     $ENV{PATH} = "$trf_path:" . $ENV{PATH};
@@ -400,10 +419,34 @@ if ($multalin_path eq ''){
     }
 }
 else{
-    if (!-f "$multalin_path/yass"){
+    if (!-f "$multalin_path/multalin"){
         die "multalin does not exist in the specified path: $multalin_path:\n";
     }
     $ENV{PATH} = "$multalin_path:" . $ENV{PATH};
+}
+
+my $tool_test_dir = "$Bin/tool_test";
+my @yass_result = ();
+my @trf_result = ();
+system ("rm -f $tool_test_dir/multalin_test.cl2") if (-f "$tool_test_dir/multalin_test.cl2");
+system ("rm -f $tool_test_dir/multalin_test.msf") if (-f "$tool_test_dir/multalin_test.msf");
+@yass_result = `yass -O 20 -m 10 -i 10 $tool_test_dir/test1.fasta $tool_test_dir/test2.fasta 2>/dev/null`;
+@trf_result = `trf $tool_test_dir/test1.fasta 2 7 7 80 10 50 2000 -d -l 1 -h -ngs`;
+my @multalin_result = `multalin -q $tool_test_dir/multalin_test.fasta`;
+if (@yass_result < 20){
+    die "yass seems not to be properly installed:\n";
+}
+if (@trf_result < 2){
+    die "trf seems not to be properly installed:\n";
+}
+foreach (@multalin_result){
+    chomp $_;
+    if ($_ =~ /Error/){
+        die "multalin seems not to be properly installed or MULTALIN environment variable is not set:\n";
+    }
+}
+if (!-f "$tool_test_dir/multalin_test.msf"){
+    die "multalin seems not to be properly installed or MULTALIN environment variable is not set:\n";
 }
 
 if ($non_human == 0){
