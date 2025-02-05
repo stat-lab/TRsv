@@ -14,6 +14,7 @@ use FindBin qw($Bin);
 # call DELs in a repeat-aware manner
 
 my $data_dir = "$Bin/../Data";
+my $tool_test_dir = "$Bin/../tool_test";
 
 my $ref_file = '';
 
@@ -425,7 +426,6 @@ else{
     $ENV{PATH} = "$multalin_path:" . $ENV{PATH};
 }
 
-my $tool_test_dir = "$Bin/tool_test";
 my @yass_result = ();
 my @trf_result = ();
 system ("rm -f $tool_test_dir/multalin_test.cl2") if (-f "$tool_test_dir/multalin_test.cl2");
