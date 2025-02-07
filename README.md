@@ -15,7 +15,7 @@ R 3.5 or later (required library: [xgboost, Matrix, data.table, jsonlite, and la
 [TRF](https://github.com/Benson-Genomics-Lab/TRF)  
 [MultAlin](http://lipm-bioinfo.toulouse.inrae.fr/download/multalin/)  
 The above install directories must be set to PATH or specified with the corresponding tool_path options to enable to execute perl, Rscript, samtools, minimap2, yass, trf, and multalin.   
-- Tip for multalin installation  
+- Tips for multalin installation  
   ```
   gzip -dc multalin.5.4.1.dynamic.sources.tar.gz | tar xvf -
   cd multalin.5.4.1
