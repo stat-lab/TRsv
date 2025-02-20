@@ -1465,14 +1465,17 @@ foreach my $chr (keys %ins_bp_cons){			# Assign INS-BP to INS matching the break
 		@hit_len = sort {$a <=> $b} @hit_len;
 		my $hn = int (@hit_len * 0.5);
 		my $med_len = $hit_len[$hn];
-		my $info = join (',,', @{${$ins_bp_cons{$chr}}{$pos}});
 		my $str = '';
 		my $ids1 = '';
 		my $ids2 = '';
+		my $count = 0;
 		foreach (@{${$ins_bp_cons{$chr}}{$pos}}){
-			my ($id) = split (/==/, $_);
+			my ($id, $bpos, $blen, $balt, $bline) = split (/==/, $_);
 			$ids1 .= "$id,";
+			${${$ins_bp_cons{$chr}}{$pos}}[$count] = "$id==$bpos==$med_len==$balt==$bline";
+			$count ++;
 		}
+		my $info = join (',,', @{${$ins_bp_cons{$chr}}{$pos}});
 		foreach my $ipos (keys %hit_pos){
 			my $ilen = $hit_pos{$ipos};
 			if (($ilen / $med_len < 2) and ($ilen / $med_len > 0.5)){
@@ -1506,6 +1509,7 @@ foreach my $chr (keys %ins_bp_assign){
 		foreach my $pos2 (sort {$a <=> $b} keys %{${$vcf_type{'INS'}}{$chr}}){
 			last if ($pos2 > $pos1 + $bplen + 20);
 			next if ($pos2 < $pos1 - 20);
+			next if ($pos2 == $pos1);
 			my $ilen = $1 if (${${$vcf_type{'INS'}}{$chr}}{$pos2} =~ /SVLEN2=(\d+)/);
 			if (($ilen >= $len1 * 0.8) and ($ilen <= $len1 * 1.25)){
 				push @hit_pos, $pos2;
@@ -1534,6 +1538,7 @@ foreach my $chr (keys %{$vcf_type{'DUP'}}){			# Assign INS-BP to DUP matching th
 		my @hit_pos;
 		my @hit_len;
 		foreach my $bpos (sort {$a <=> $b} keys %{$ins_bp_cons{$chr2}}){
+			next if (!exists ${$ins_bp_cons{$chr2}}{$bpos}) or (!exists ${$ins_bp_len{$chr2}}{$bpos});
 			my $bplen = ${$ins_bp_len{$chr2}}{$bpos};
 			my $bend = $bpos + $bplen - 1;
 			last if ($bpos > $pos + 50);
@@ -1553,12 +1558,15 @@ foreach my $chr (keys %{$vcf_type{'DUP'}}){			# Assign INS-BP to DUP matching th
 			$ids1 .= "$id,";
 		}
 		foreach my $ipos (@hit_pos){
+			my $count = 0;
+			foreach (@{${$ins_bp_cons{$chr2}}{$ipos}}){
+				my ($id, $bpos, $blen, $balt, $bline) = split (/==/, $_);
+				${${$ins_bp_cons{$chr}}{$ipos}}[$count] = "$id==$bpos==$dlen==$balt==$bline";
+				$ids2 .= "$id,";
+				$count ++;
+			}
 			my $inf = join (',,', @{${$ins_bp_cons{$chr2}}{$ipos}});
 			$info .= ",,$inf";
-			foreach (@{${$ins_bp_cons{$chr2}}{$ipos}}){
-				my ($id) = split (/==/, $_);
-				$ids2 .= "$id,";
-			}
 			delete ${$ins_bp_cons{$chr2}}{$ipos};
 			delete ${$ins_bp_len{$chr2}}{$ipos};
 		}
@@ -2130,7 +2138,7 @@ else{
 	%vcf_type = ();
 }
 
-foreach my $chr (sort keys %vcf_cons){
+foreach my $chr (sort keys %vcf_cons){		# divide multi-allelic INSs
 	my $chr2 = $chr;
 	$chr2 =~ s/^0*//;
 	foreach my $pos (sort {$a <=> $b} keys %{$vcf_cons{$chr}}){
@@ -2165,27 +2173,77 @@ foreach my $chr (sort keys %vcf_cons){
 			if (($max_len / $min_len > 1.8) and ($max_len > 3)){
 				my %max_id;
 				my %min_id;
+				my %med_id;
 				my @max_pos;
 				my @min_pos;
+				my @med_pos;
+				my @min_len;
+				my @med_len;
+				my @max_len;
 				foreach my $id (keys %id_pos_len){
 					foreach my $pos2 (keys %{$id_pos_len{$id}}){
 						my $ilen = ${$id_pos_len{$id}}{$pos2};
 						my $max_diff = $max_len - $ilen;
 				        my $min_diff = $ilen - $min_len;
-				        if ($max_diff <= $min_diff){
+				        if (($max_diff >= 20) and ($min_diff >= 20) and ($max_diff / $ilen > 0.5) and ($min_diff / $ilen > 0.5) and ($max_len >= 50)){
+				        	$med_id{$id} = $pos2;
+				            push @med_pos, $pos2;
+				            push @med_len, $ilen;
+				        }
+				        elsif ($max_diff <= $min_diff){
 				            $max_id{$id} = $pos2;
 				            push @max_pos, $pos2;
+				            push @max_len, $ilen;
 				        }
-				        else{
+				        elsif ($max_diff > $min_diff){
 				            $min_id{$id} = $pos2;
 				            push @min_pos, $pos2;
+				            push @min_len, $ilen;
 				        }
 				    }
 				}
+				if ((@med_len > 0) and (@min_len > 0) and (@max_len > 0)){
+					my $sum_minlen = 0;
+					my $sum_medlen = 0;
+					my $sum_maxlen = 0;
+					map{$sum_minlen += $_} @min_len;
+					map{$sum_medlen += $_} @med_len;
+					map{$sum_maxlen += $_} @max_len;
+					my $ave_minlen = int ($sum_minlen / @min_len + 0.5);
+					my $ave_medlen = int ($sum_medlen / @med_len + 0.5);
+					my $ave_maxlen = int ($sum_maxlen / @max_len + 0.5);
+					my $max_diff2 = $ave_maxlen - $ave_medlen;
+					my $med_diff2 = $ave_medlen - $ave_minlen;
+					if (($max_diff2 < 20) or ($med_diff2 < 20)){
+						%max_id = ();
+						%min_id = ();
+						%med_id = ();
+						@max_pos = ();
+						@min_pos = ();
+						@med_pos = ();
+						foreach my $id (keys %id_pos_len){
+							foreach my $pos2 (keys %{$id_pos_len{$id}}){
+								my $ilen = ${$id_pos_len{$id}}{$pos2};
+								my $max_diff = $max_len - $ilen;
+						        my $min_diff = $ilen - $min_len;
+						        if ($max_diff <= $min_diff){
+						            $max_id{$id} = $pos2;
+						            push @max_pos, $pos2;
+						        }
+						        elsif ($max_diff > $min_diff){
+						            $min_id{$id} = $pos2;
+						            push @min_pos, $pos2;
+						        }
+						    }
+						}
+					}
+				}
 				my $max_info = '';
 				my $min_info = '';
+				my $med_info = '';
 				my @maxid;
 				my @minid;
+				my @medid;
 				foreach (@id_info){
 					my ($id, $pos2) = split (/==/, $_);
 					if ((exists $max_id{$id}) and ($max_id{$id} == $pos2)){
@@ -2196,18 +2254,24 @@ foreach my $chr (sort keys %vcf_cons){
 						$min_info .= "$_,,";
 						push @minid, $id;
 					}
+					elsif ((exists $med_id{$id}) and ($med_id{$id} == $pos2)){
+						$med_info .= "$_,,";
+						push @medid, $id;
+					}
 				}
 				$max_info =~ s/,,$//;
 				$min_info =~ s/,,$//;
+				$med_info =~ s/,,$// if ($med_info =~ /,,$/);
 				my $max_pos = 0;
 				my $min_pos = 0;
+				my $med_pos = 0;
 				if (@max_pos == 1){
 					$max_pos = $max_pos[0];
 				}
 				elsif (@max_pos == 2){
 					$max_pos = int (($max_pos[0] + $max_pos[1]) * 0.5 + 0.5);
 				}
-				else{
+				elsif (@max_pos > 2){
 					my $hmax = int (@max_pos * 0.5);
 					@max_pos = sort {$a <=> $b} @max_pos;
 					$max_pos = $max_pos[$hmax];
@@ -2218,14 +2282,76 @@ foreach my $chr (sort keys %vcf_cons){
 				elsif (@min_pos == 2){
 					$min_pos = int (($min_pos[0] + $min_pos[1]) * 0.5 + 0.5);
 				}
-				else{
+				elsif (@min_pos > 2){
 					my $hmin = int (@min_pos * 0.5);
 					@min_pos = sort {$a <=> $b} @min_pos;
 					$min_pos = $min_pos[$hmin];
 				}
-				if (($max_pos > 0) and ($min_pos > 0)){
+				if (@med_pos == 1){
+					$med_pos = $med_pos[0];
+				}
+				elsif (@med_pos == 2){
+					$med_pos = int (($med_pos[0] + $med_pos[1]) * 0.5 + 0.5);
+				}
+				elsif (@med_pos > 2){
+					my $hmin = int (@med_pos * 0.5);
+					@med_pos = sort {$a <=> $b} @med_pos;
+					$med_pos = $med_pos[$hmin];
+				}
+				if (($max_pos > 0) and ($min_pos > 0) and ($med_pos > 0)){
+					if (($max_pos == $min_pos) and ($max_pos == $med_pos)){
+						while (1){
+							$med_pos --;
+							last if (!exists ${${$vcf_cons{$chr}}{$med_pos}}{$type});
+						}
+						$min_pos = $med_pos;
+						while (1){
+							$min_pos --;
+							last if (!exists ${${$vcf_cons{$chr}}{$min_pos}}{$type});
+						}
+					}
+					elsif ($max_pos == $min_pos){
+						while (1){
+							$min_pos --;
+							last if (!exists ${${$vcf_cons{$chr}}{$min_pos}}{$type});
+						}
+					}
+					elsif ($max_pos == $med_pos){
+						while (1){
+							$med_pos --;
+							last if (!exists ${${$vcf_cons{$chr}}{$med_pos}}{$type});
+						}
+					}
+					elsif ($min_pos == $med_pos){
+						while (1){
+							$min_pos --;
+							last if (!exists ${${$vcf_cons{$chr}}{$min_pos}}{$type});
+						}
+					}
+					my $arg1 = ${${$vcf_cons{$chr}}{$pos}}{$type};
+					my $arg2 = $arg1;
+					my $arg3 = $arg1;
+					$arg1 =~ s/SAMPLES=\S+/SAMPLES=$max_info/;
+					$arg2 =~ s/SAMPLES=\S+/SAMPLES=$min_info/;
+					$arg3 =~ s/SAMPLES=\S+/SAMPLES=$med_info/;
+					delete ${${$vcf_cons{$chr}}{$pos}}{$type};
+					delete ${$vcf_cons{$chr}}{$pos} if (scalar keys %{${$vcf_cons{$chr}}{$pos}} == 0);
+					${${$vcf_cons{$chr}}{$max_pos}}{$type} = $arg1;
+					${${$vcf_cons{$chr}}{$min_pos}}{$type} = $arg2;
+					${${$vcf_cons{$chr}}{$med_pos}}{$type} = $arg3;
+					if (exists ${$ins_bp_convert{$chr2}}{$pos}){
+						my $bplen = ${$ins_bp_convert{$chr2}}{$pos};
+						${$ins_bp_convert{$chr2}}{$max_pos} = $bplen;
+						${$ins_bp_convert{$chr2}}{$min_pos} = $bplen;
+						${$ins_bp_convert{$chr2}}{$med_pos} = $bplen;
+					}
+				}
+				elsif (($max_pos > 0) and ($min_pos > 0)){
 					if ($max_pos == $min_pos){
-						$min_pos ++;
+						while (1){
+							$min_pos --;
+							last if (!exists ${${$vcf_cons{$chr}}{$min_pos}}{$type});
+						}
 					}
 					my $arg1 = ${${$vcf_cons{$chr}}{$pos}}{$type};
 					my $arg2 = $arg1;
@@ -2239,6 +2365,48 @@ foreach my $chr (sort keys %vcf_cons){
 						my $bplen = ${$ins_bp_convert{$chr2}}{$pos};
 						${$ins_bp_convert{$chr2}}{$max_pos} = $bplen;
 						${$ins_bp_convert{$chr2}}{$min_pos} = $bplen;
+					}
+				}
+				elsif (($med_pos > 0) and ($min_pos > 0)){
+					if ($med_pos == $min_pos){
+						while (1){
+							$min_pos --;
+							last if (!exists ${${$vcf_cons{$chr}}{$min_pos}}{$type});
+						}
+					}
+					my $arg1 = ${${$vcf_cons{$chr}}{$pos}}{$type};
+					my $arg2 = $arg1;
+					$arg1 =~ s/SAMPLES=\S+/SAMPLES=$med_info/;
+					$arg2 =~ s/SAMPLES=\S+/SAMPLES=$min_info/;
+					delete ${${$vcf_cons{$chr}}{$pos}}{$type};
+					delete ${$vcf_cons{$chr}}{$pos} if (scalar keys %{${$vcf_cons{$chr}}{$pos}} == 0);
+					${${$vcf_cons{$chr}}{$med_pos}}{$type} = $arg1;
+					${${$vcf_cons{$chr}}{$min_pos}}{$type} = $arg2;
+					if (exists ${$ins_bp_convert{$chr2}}{$pos}){
+						my $bplen = ${$ins_bp_convert{$chr2}}{$pos};
+						${$ins_bp_convert{$chr2}}{$med_pos} = $bplen;
+						${$ins_bp_convert{$chr2}}{$min_pos} = $bplen;
+					}
+				}
+				elsif (($max_pos > 0) and ($med_pos > 0)){
+					if ($max_pos == $med_pos){
+						while (1){
+							$med_pos --;
+							last if (!exists ${${$vcf_cons{$chr}}{$med_pos}}{$type});
+						}
+					}
+					my $arg1 = ${${$vcf_cons{$chr}}{$pos}}{$type};
+					my $arg2 = $arg1;
+					$arg1 =~ s/SAMPLES=\S+/SAMPLES=$max_info/;
+					$arg2 =~ s/SAMPLES=\S+/SAMPLES=$med_info/;
+					delete ${${$vcf_cons{$chr}}{$pos}}{$type};
+					delete ${$vcf_cons{$chr}}{$pos} if (scalar keys %{${$vcf_cons{$chr}}{$pos}} == 0);
+					${${$vcf_cons{$chr}}{$max_pos}}{$type} = $arg1;
+					${${$vcf_cons{$chr}}{$med_pos}}{$type} = $arg2;
+					if (exists ${$ins_bp_convert{$chr2}}{$pos}){
+						my $bplen = ${$ins_bp_convert{$chr2}}{$pos};
+						${$ins_bp_convert{$chr2}}{$max_pos} = $bplen;
+						${$ins_bp_convert{$chr2}}{$med_pos} = $bplen;
 					}
 				}
 			}
@@ -2255,7 +2423,7 @@ foreach my $chr (sort keys %vcf_cons){
 	$chr2 =~ s/^0*//;
 	foreach my $pos (sort {$a <=> $b} keys %{$vcf_cons{$chr}}){
 		foreach my $type (keys %{${$vcf_cons{$chr}}{$pos}}){
-			my $len = $1 if (${${$vcf_cons{$chr}}{$pos}}{$type} =~ /SVLEN=-*(\d+)/);
+			my $len = $1 if (${${$vcf_cons{$chr}}{$pos}}{$type} =~ /SVLEN2=-*(\d+)/);
 			next if ($len == 0);
 			my $id_info = $1 if (${${$vcf_cons{$chr}}{$pos}}{$type} =~ /SAMPLES=(\S+)/);
 			my @id_info = split (/,,/, $id_info);
@@ -2285,6 +2453,7 @@ foreach my $chr (sort keys %vcf_cons){
 			my @sar;
 			foreach (@id_info){
 				my ($id, $pos2, $len2, $alt, $inf2) = split (/==/, $_);
+				$len2 = $len if ($len2 == 0);
 				if (exists $len{$id}){
 					my $pre_len = $len{$id};
 					my $diff = abs ($len - $len2);
