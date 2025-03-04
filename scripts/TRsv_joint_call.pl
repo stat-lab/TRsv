@@ -387,7 +387,6 @@ foreach my $id (@sample_id){
 					$line[7] =~ s/CN=gain\+[\d\.]+;/CN=gain+$cn1,loss-$cn2;/;
 				}
 			}
-			$line[4] = 'TR:CNV';
 			$line = join ("\t", @line);
 			${${$cnv_line{$chr}}{$pos}}{$id} = $line;
 			$cnv_info{$strid} = "$chr=$pos=$strend=$strulen";
