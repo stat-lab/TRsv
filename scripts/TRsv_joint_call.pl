@@ -234,7 +234,7 @@ foreach my $id (@sample_id){
 		next if (exists $gender{$id}) and ($gender{$id} eq 'F') and ($chr eq 'Y');
 		my $pos = $line[1];
 		my $type = $1 if ($line[7] =~ /SVTYPE=(.+?);/);
-		if ($line[4] =~ /TR/){
+		if ($line[4] =~ /CNV/){
 			my $len1 = 0;
 			my $len2 = 0;
 			$len1 = $1 if ($line[7] =~ /SVLEN=(\d+),\d+/);
@@ -387,6 +387,7 @@ foreach my $id (@sample_id){
 					$line[7] =~ s/CN=gain\+[\d\.]+;/CN=gain+$cn1,loss-$cn2;/;
 				}
 			}
+			$line[4] = 'TR:CNV';
 			$line = join ("\t", @line);
 			${${$cnv_line{$chr}}{$pos}}{$id} = $line;
 			$cnv_info{$strid} = "$chr=$pos=$strend=$strulen";
