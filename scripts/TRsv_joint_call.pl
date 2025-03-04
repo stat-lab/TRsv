@@ -208,6 +208,7 @@ print STDERR "Total samples: $total_sample_num\n";
 my %call;
 my %call_line;
 my %cnv_line;
+my %cnv_info;
 my %call_cons;
 my %call_cons_len;
 my %used_pos;
@@ -239,6 +240,9 @@ foreach my $id (@sample_id){
 			$len1 = $1 if ($line[7] =~ /SVLEN=(\d+),\d+/);
 			$len2 = $1 if ($line[7] =~ /SVLEN=\d+,(\d+)/);
 			$len1 = $1 if ($line[7] =~ /SVLEN=(\d+);/);
+			my $strid = $1 if ($line[7] =~ /TRID=(.+?);/);
+			my $strend = $1 if ($line[7] =~ /TREND=(\d+)/);
+			my $strulen = $1 if ($line[7] =~ /TRULEN=(\d+)/);
 			if (($type eq 'DEL') or ($type eq 'INS')){
 				if (($len1 < $min_str_len) and ($len2 < $min_str_len)){
 					next;
@@ -385,6 +389,7 @@ foreach my $id (@sample_id){
 			}
 			$line = join ("\t", @line);
 			${${$cnv_line{$chr}}{$pos}}{$id} = $line;
+			$cnv_info{$strid} = "$chr=$pos=$strend=$strulen";
 		}
 		else{
 			my $len = 0;
@@ -2416,7 +2421,6 @@ foreach my $chr (sort keys %vcf_cons){		# divide multi-allelic INSs
 
 my %vcf_cons2;
 my %vcf_type2;
-my %ins_str;
 
 foreach my $chr (sort keys %vcf_cons){
 	my $chr2 = $chr;
@@ -2759,15 +2763,186 @@ foreach my $chr (sort keys %vcf_cons){
 			}
 			my $strid_count = scalar keys %strid;
 			my $lowconf_count = scalar keys %lowconf;
-			if ($strid_count / $sc >= 0.5){
+			if (($strid_count > 0) and ($type eq 'INS') and (@meilen == 0)){
 				my $top_strid = '';
 				foreach my $strid (sort {$strid2{$b} <=> $strid2{$a}} keys %strid2){
 					$top_strid = $strid;
 					last;
 				}
-				$new_line .= ";TRID=$top_strid";
-				if (($top_strid =~ /^TR/) and ($type eq 'INS')){
-					${$ins_str{$top_strid}}{"$chr=$pos=$med_len"} = $ac;
+				if (exists $cnv_info{$top_strid}){
+					my ($schr, $spos, $strend, $strulen) = split (/=/, $cnv_info{$top_strid});
+					my $match = 0;
+					my %match;
+					foreach my $id (keys %{${$cnv_line{$schr}}{$spos}}){
+						my $cnv_line = ${${$cnv_line{$schr}}{$spos}}{$id};
+						my $stype = $1 if ($cnv_line =~ /SVTYPE=(.+?);/);
+						my $stype1 = $stype;
+						my $stype2 = '';
+						($stype1, $stype2) = split (/,/, $stype) if ($stype =~ /,/);
+						my $vlen = $1 if ($cnv_line =~ /SVLEN=(.+?);/);
+						my $svrr = $1 if ($cnv_line =~ /VRR=(.+?);/);
+						my $sread = $1 if ($cnv_line =~ /READS=(.+?);/);
+						my $sgt = $1 if ($cnv_line =~ /GT=(.+?);/);
+						$sgt = 'HT' if ($sgt eq 'HT2');
+						if ($vlen =~ /,/){
+							my ($vlen1, $vlen2) = split (/,/, $vlen);
+							$vlen1 = 0 - $vlen1 if ($vlen1 < 0);
+							$vlen2 = 0 - $vlen2 if ($vlen2 < 0);
+							if (($stype1 eq 'INS') and ($vlen1 >= $len * 0.8) and ($vlen1 <= $len * 1.25)){
+								$match ++;
+								my ($svrr1, $svrr2) = split (/,/, $svrr);
+								my ($sread1, $sread2) = split (/,/, $sread);
+								$match{$id} = "$vlen1=$svrr1=$sread1=$sgt";
+							}
+							elsif (($stype1 eq 'INS') and ($stype !~ /,/) and ($vlen2 >= $len * 0.8) and ($vlen2 <= $len * 1.25)){
+								$match ++;
+								my ($svrr1, $svrr2) = split (/,/, $svrr);
+								my ($sread1, $sread2) = split (/,/, $sread);
+								$match{$id} = "$vlen2=$svrr2=$sread2=$sgt";
+							}
+							elsif (($stype2 eq 'INS') and ($stype =~ /,/) and ($vlen2 >= $len * 0.8) and ($vlen2 <= $len * 1.25)){
+								$match ++;
+								my ($svrr1, $svrr2) = split (/,/, $svrr);
+								my ($sread1, $sread2) = split (/,/, $sread);
+								$match{$id} = "$vlen2=$svrr2=$sread2=$sgt";
+							}
+						}
+						elsif ($stype1 eq 'INS'){
+							if (($vlen > 0) and ($vlen >= $len * 0.8) and ($vlen <= $len * 1.25)){
+								$match ++;
+								$match{$id} = "$vlen=$svrr=$sread=$sgt";
+							}
+						}
+					}
+					if ($match >= $sc){						# INS within STR region is merged to STR-INS
+						foreach my $id (keys %pos){
+							my $slen = $len{$id};
+							my $svrr = $vrr{$id};
+							my $sread = $read{$id};
+							my $sgt = $gt{$id};
+							my $cn = int ($slen / $strulen * 10 + 0.5) / 10;
+							if (!exists ${${$cnv_line{$schr}}{$spos}}{$id}){
+								my $new_line2 = "$chr2\t$spos\t.\t.\t<CNV:TR>\t.\tPASS\tSVTYPE=INS;SVLEN=$slen;READS=$sread;CN=gain+$cn;VRR=$svrr;SAR=0;GT=$sgt;END=$spos;TRID=$top_strid;TREND=$strend;TRULEN=$strulen";
+								${${$cnv_line{$schr}}{$spos}}{$id} = $new_line2;
+							}
+							else{
+								my $cnv_line = ${${$cnv_line{$schr}}{$spos}}{$id};
+								my $vlen = $1 if ($cnv_line =~ /SVLEN=(.+?);/);
+								if ($vlen !~ /,/){
+									$vlen = 0 - $vlen if ($vlen < 0);
+									my $vtype = $1 if ($cnv_line =~ /SVTYPE=(.+?);/);
+									my $vvrr = $1 if ($cnv_line =~ /VRR=(.+?);/);
+									my $vread = $1 if ($cnv_line =~ /READS=(.+?);/);
+									my $vcn = int ($vlen / $strulen * 10 + 0.5) / 10;
+									my $cn = int ($vlen / $strulen * 10 + 0.5) / 10;
+									if (($vtype eq 'INS') and (($vlen / $slen < 0.8) or ($vlen / $slen > 1.25))){
+										$cnv_line =~ s/SVLEN=$vlen/SVLEN=$vlen,$slen/;
+										$cnv_line =~ s/VRR=$vvrr/VRR=$vvrr,$svrr/;
+										$cnv_line =~ s/READS=$vread/READS=$vread,$sread/;
+										$cnv_line =~ s/GT=.+?;/GT=HT2;/;
+										$cnv_line =~ s/CN=.+?;/CN=gain+$vcn,gain+$cn;/;
+										${${$cnv_line{$schr}}{$spos}}{$id} = $cnv_line;
+									}
+									elsif ($vtype eq 'DEL'){
+										$cnv_line =~ s/SVLEN=$vlen/SVLEN=$vlen,$slen/;
+										$cnv_line =~ s/VRR=$vvrr/VRR=$vvrr,$svrr/;
+										$cnv_line =~ s/READS=$vread/READS=$vread,$sread/;
+										$cnv_line =~ s/GT=.+?;/GT=HT2;/;
+										$cnv_line =~ s/CN=.+?;/CN=loss-$vcn,gain+$cn;/;
+										$cnv_line =~ s/SVTYPE=DEL/SVTYPE=DEL,INS/;
+										${${$cnv_line{$schr}}{$spos}}{$id} = $cnv_line;
+									}
+								}
+							}
+						}
+						next;
+					}
+					elsif ($strid_count / $sc >= 0.5){		# STR-INS is merged to INS with no STR copies
+						$new_line .= ";TRID=$top_strid";
+						if ($strid_count >= $match){
+							$format_info = '';
+							foreach my $id (sort keys %Gid){
+								if (exists $gt_info{$id}){
+									$format_info .= "$gt_info{$id}\t";
+								}
+								elsif (exists $match{$id}){
+									my ($slen, $svrr, $sread, $sgt) = split (/=/, $match{$id});
+									$format_info .= "$sgt:$pos:$slen:$sread:$svrr:0:1:0\t";
+								}
+								else{
+									$format_info .= "0/0:0:0:0:0:0:0:0\t";
+								}
+							}
+							$format_info =~ s/\t$//;
+							foreach my $id (keys %{${$cnv_line{$schr}}{$spos}}){
+								next if (!exists $match{$id});
+								my $cnv_line = ${${$cnv_line{$schr}}{$spos}}{$id};
+								my $stype = $1 if ($cnv_line =~ /SVTYPE=(.+?);/);
+								my $stype1 = $stype;
+								my $stype2 = '';
+								($stype1, $stype2) = split (/,/, $stype) if ($stype =~ /,/);
+								my $vlen = $1 if ($cnv_line =~ /SVLEN=(.+?);/);
+								my $svrr = $1 if ($cnv_line =~ /VRR=(.+?);/);
+								my $sread = $1 if ($cnv_line =~ /READS=(.+?);/);
+								my $sgt = $1 if ($cnv_line =~ /GT=(.+?);/);
+								my ($slen) = split (/=/, $match{$id});
+								if ($vlen =~ /,/){
+									my ($vlen1, $vlen2) = split (/,/, $vlen);
+									$vlen1 = 0 - $vlen1 if ($vlen1 < 0);
+									$vlen2 = 0 - $vlen2 if ($vlen2 < 0);
+									if (($stype1 eq 'INS') and ($vlen1 == $slen)){
+										my ($svrr1, $svrr2) = split (/,/, $svrr);
+										my ($sread1, $sread2) = split (/,/, $sread);
+										$cnv_line =~ s/SVLEN=.+?;/SVLEN=$vlen2;/;
+										$cnv_line =~ s/VRR=.+?;/VRR=$svrr2;/;
+										$cnv_line =~ s/READS=.+?;/READS=$sread2;/;
+										$cnv_line =~ s/GT=.+?;/GT=HT;/;
+										my $cn = int ($vlen2 / $strulen * 10 + 0.5) / 10;
+										if ($vlen2 < 0){
+											$cnv_line =~ s/SVTYPE=.+?;/SVTYPE=DEL;/;
+											$cnv_line =~ s/CN=.+?;/CN=loss$cn;/;
+										}
+										else{
+											$cnv_line =~ s/CN=.+?;/CN=gain+$cn;/;
+										}
+										${${$cnv_line{$schr}}{$spos}}{$id} = $cnv_line;
+									}
+									elsif ((($stype2 eq 'INS') or (($stype1 eq 'INS') and ($stype2 eq ''))) and ($vlen2 == $slen)){
+										my ($svrr1, $svrr2) = split (/,/, $svrr);
+										my ($sread1, $sread2) = split (/,/, $sread);
+										$cnv_line =~ s/SVLEN=.+?;/SVLEN=$vlen1;/;
+										$cnv_line =~ s/VRR=.+?;/VRR=$svrr1;/;
+										$cnv_line =~ s/READS=.+?;/READS=$sread1;/;
+										$cnv_line =~ s/GT=.+?;/GT=HT;/;
+										my $cn = int ($vlen1 / $strulen * 10 + 0.5) / 10;
+										if ($vlen1 < 0){
+											$cnv_line =~ s/SVTYPE=.+?;/SVTYPE=DEL;/;
+											$cnv_line =~ s/CN=.+?;/CN=loss$cn;/;
+										}
+										else{
+											$cnv_line =~ s/CN=.+?;/CN=gain+$cn;/;
+										}
+										${${$cnv_line{$schr}}{$spos}}{$id} = $cnv_line;
+									}
+								}
+								else{
+									$vlen = 0 - $vlen if ($vlen < 0);
+									if (($stype1 eq 'INS') and ($vlen == $slen)){
+										delete ${${$cnv_line{$schr}}{$spos}}{$id};
+									}
+								}
+								if (scalar keys %{${$cnv_line{$schr}}{$spos}} == 0){
+									delete ${$cnv_line{$schr}}{$spos};
+									delete $cnv_info{$top_strid};
+								}
+							}
+						}
+					}
+				}
+				else{
+					if ($strid_count / $sc >= 0.5){
+						$new_line .= ";TRID=$top_strid";
+					}
 				}
 			}
 			if ($lowconf_count / $sc >= 0.5){
@@ -3492,108 +3667,12 @@ foreach my $chr (keys %cnv_line){
 				$del_range = $dellen[0] if ($dellen[0] == $dellen[-1]);
 			}
 			else{
+				next if ($ins_ac == 0);
 				@inslen = sort {$a <=> $b} @inslen;
 				$ins_range = "$inslen[0]-$inslen[-1]";
 				$ins_range = $inslen[0] if ($inslen[0] == $inslen[-1]);
 				$max_inslen = $inslen[-1];
 				$min_inslen = $inslen[0];
-			}
-		}
-		if (exists $ins_str{$strid}){					# merge TR-INS and INS within the same strid when meeting the criteria
-			foreach my $pos_info (sort {${$ins_str{$strid}}{$a} <=> ${$ins_str{$strid}}{$b}} keys %{$ins_str{$strid}}){
-				my $ac2 = ${$ins_str{$strid}}{$pos_info};
-				my ($chr2, $pos2, $ilen2) = split (/=/, $pos_info);
-				if (($ins_ac >= $ac2 * 2) and ($max_inslen >= $ilen2)){
-					if (exists ${${$vcf_cons2{$chr2}}{$pos2}}{'INS'}){
-						my $iline = ${${$vcf_cons2{$chr2}}{$pos2}}{'INS'};
-						my @iline = split (/\t/, $iline);
-						my $count = 0;
-						foreach (@iline){
-							$count ++;
-							next if ($count <= 9);
-							next if ($_ =~ /^0\/0/);
-							my $ID = $Gid_order{$count};
-							my ($igt, $ipos, $ilen, $iread, $ivrr, $ibp, $idpr) = split (/:/, $_);
-							my $icn = int ($ilen / $strulen * 0.5 * 10 + 0.5) / 10;
-							if (!exists $gt{$ID}){
-								$len{$ID} = $ilen;
-								$gt{$ID} = $igt ;
-								$read{$ID} = $iread;
-								$vrr{$ID} = $ivrr;
-								$bp{$ID} = $ibp;
-								$cn{$ID} = $icn;
-							}
-						}
-						delete ${${$vcf_cons2{$chr2}}{$pos2}}{'INS'};
-					}
-				}
-				elsif (($ins_ac > 0) and ($ins_ac * 4 < $ac2)){
-					if (($ilen2 * 0.7 >= $min_inslen) and ($ilen2 * 1.4 <= $max_inslen)){
-						if (exists ${${$vcf_cons2{$chr2}}{$pos2}}{'INS'}){
-							my $iline = ${${$vcf_cons2{$chr2}}{$pos2}}{'INS'};
-							my @iline = split (/\t/, $iline);
-							my $count = 0;
-							my $merge_flag = 0;
-							foreach (@iline){
-								$count ++;
-								next if ($count <= 9);
-								next if ($_ !~ /^0\/0/);
-								my $ID = $Gid_order{$count};
-								next if (!exists $gt{$ID}) or (!exists $read{$ID});
-								my $str_len = $len{$ID};
-								my $flag = 0;
-								if ($str_len =~ /,/){
-									my ($str_len1, $str_len2) = split (/,/, $str_len);
-									$str_len = 0;
-									if ($str_len1 > 0){
-										if (($str_len1 / $ilen2 >= 0.5) and ($str_len1 / $ilen2 <= 2)){
-											$str_len = $str_len1;
-											$flag = 1;
-										}
-									}
-									if (($str_len == 0) and ($str_len2 > 0)){
-										if (($str_len2 / $ilen2 >= 0.5) and ($str_len2 / $ilen2 <= 2)){
-											$str_len = $str_len2;
-											$flag = 2;
-										}
-									}
-								}
-								else{
-									if ($str_len > 0){
-										if (($str_len / $ilen2 >= 0.5) and ($str_len / $ilen2 <= 2)){
-											$flag = 1;
-										}
-									}
-								}
-								next if ($flag == 0);
-								$merge_flag = 1;
-								my $ilen = $str_len;
-								my $igt = $gt{$ID};
-								$igt = '0/1' if ($igt eq '2/2');
-								my $iread = $read{$ID};
-								if ($iread =~ /,/){
-									my @iread = split (/,/, $iread);
-									$iread = $iread[$flag - 1];
-								}
-								my $ivrr = $vrr{$ID};
-								if ($ivrr =~ /,/){
-									my @ivrr = split (/,/, $ivrr);
-									$ivrr = $ivrr[$flag - 1];
-								}
-								my $ibp = $bp{$ID};
-								my $ipos = $pos;
-								my $dpr = 1;
-								my $info = "$igt:$ipos:$ilen:$iread:$ivrr:$ibp:$dpr:0";
-								$iline[$count - 1] = $info;
-							}
-							if ($merge_flag == 1){
-								my $new_iline = join ("\t", @iline);
-								${${$vcf_cons2{$chr2}}{$pos2}}{'INS'} = $new_iline;
-								next;
-							}
-						}
-					}
-				}
 			}
 		}
 		my $ave_sar = 0;
