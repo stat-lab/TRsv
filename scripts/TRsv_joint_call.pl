@@ -3648,6 +3648,8 @@ foreach my $chr (keys %cnv_line){
 		my $min_inslen = 0;
 		if (scalar keys %ctype == 2){
 			$type2 = 'DEL,INS';
+			next if (@dellen == 0);
+			next if (@inslen == 0);
 			@dellen = sort {$a <=> $b} @dellen;
 			$del_range = "$dellen[0]-$dellen[-1]";
 			$del_range = $dellen[0] if ($dellen[0] == $dellen[-1]);
@@ -3662,6 +3664,7 @@ foreach my $chr (keys %cnv_line){
 				$type2 = $ctype;
 			}
 			if ($type2 eq 'DEL'){
+				next if (@dellen == 0);
 				@dellen = sort {$a <=> $b} @dellen;
 				$del_range = "$dellen[0]-$dellen[-1]";
 				$del_range = $dellen[0] if ($dellen[0] == $dellen[-1]);
