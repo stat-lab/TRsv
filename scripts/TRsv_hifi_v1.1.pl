@@ -14,7 +14,8 @@ use FindBin qw($Bin);
 # call DELs in a repeat-aware manner
 
 my $data_dir = "$Bin/../Data";
-my $tool_test_dir = "$Bin/../tool_test";
+my $TRsv_dir = $1 if ($Bin =~ /(.+)\/scripts/);
+my $tool_test_dir = "$TRsv_dir/tool_test";
 
 my $ref_file = '';
 
