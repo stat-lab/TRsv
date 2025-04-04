@@ -1138,16 +1138,16 @@ while (my $line = <FILE>){
                     my $str_motif = $STR_motif{$strid};
                     my $motif_size = length $str_motif;
                     my $mei_match_flag = 0;
-                    if (($me_type eq 'ALU') and ($overlaplen >= 180) and ($motif_size <= 150)){
+                    if (($me_type eq 'ALU') and ($overlaplen >= 160) and ($motif_size <= 150)){
                         $mei_match_flag = 1;
                     }
-                    elsif (($me_type eq 'SVA') and ($overlaplen >= 1000)){
+                    elsif (($me_type eq 'SVA') and ($overlaplen >= 800)){
                         $mei_match_flag = 1;
                     }
-                    elsif (($me_type eq 'LINE1') and ($overlaplen >= 3000)){
+                    elsif (($me_type eq 'LINE1') and ($overlaplen >= 800)){
                         $mei_match_flag = 1;
                     }
-                    elsif (($me_type eq 'HERVK') and ($overlaplen >= 3000)){
+                    elsif (($me_type eq 'HERVK') and ($overlaplen >= 800)){
                         $mei_match_flag = 1;
                     }
                     if ($mei_match_flag == 1){
@@ -1171,8 +1171,8 @@ while (my $line = <FILE>){
                 }
                 elsif (($ins_len >= $motif_size * 2) and ($motif_size > 4)){
                     ($match_len1, my $tmotif) = &TRF_test2 ($ins_cons, $motif, $chr);
-                    my $match_cov1 = int ($match_len1 / $ins_len * 10 + 0.5) / 10;
-                    if ($match_cov1 >= 0.5){
+                    my $match_cov1 = int ($match_len1 / $ins_len * 100 + 0.5) / 100;
+                    if ($match_cov1 >= 0.6){
                         my $motif_match_flag = 0;
                         my $motifx2 = $motif . $motif;
                         my $tmotifx2 = $tmotif . $tmotif;
@@ -1183,6 +1183,13 @@ while (my $line = <FILE>){
                             $motif_match_flag = 1;
                         }
                         if ($motif_match_flag == 0){
+                            $match_len1 = 0;
+                            $match_cov1 = 0;
+                            my ($ident, $cov, $match) = &multalin_ins2 ($ins_cons, $motif, $chr);
+                            if (($ident >= $min_str_identity) and ($match >= $ins_len * $min_str_len_rate)){
+                                $match_len1 = $match;
+                            }
+=pod
                             my $tmotif_size = length $tmotif;
                             my ($ident, $cov, $match) = &multalin_ins1 ($ins_cons, $tmotif, $chr) if ($tmotif_size >= $ins_len);
                             ($ident, $cov, $match) = &multalin_ins1 ($tmotif, $ins_cons, $chr) if ($tmotif_size < $ins_len);
@@ -1190,11 +1197,14 @@ while (my $line = <FILE>){
                                 $match_len1 = 0;
                                 $match_cov1 = 0;
                             }
+=cut
                         }
                     }
-                    if ($match_cov1 < 0.5){
+                    elsif ($match_cov1 < 0.6){
+                        $match_len1 = 0;
+                        $match_cov1 = 0;
                         my ($ident, $cov, $match) = &multalin_ins2 ($ins_cons, $motif, $chr);
-                        if (($ident >= $min_str_identity) and ($match >= $ins_len * $min_str_len_rate) and ($match > $match_len1)){
+                        if (($ident >= $min_str_identity) and ($match >= $ins_len * $min_str_len_rate)){
                             $match_len1 = $match;
                         }
                     }
@@ -1213,7 +1223,7 @@ while (my $line = <FILE>){
                         }
                     }
                 }
-                my $match_cov1 = int ($match_len1 / $ins_len * 10 + 0.5) / 10;
+                my $match_cov1 = int ($match_len1 / $ins_len * 100 + 0.5) / 100;
                 my $match_cov2 = 0;
                 if ($match_cov1 < 0.8){
                     if ($sec_str eq 'NA'){
@@ -1253,8 +1263,8 @@ while (my $line = <FILE>){
                         }
                         elsif (($ins_len >= $motif_size2 * 2) and ($motif_size2 > 4)){
                             ($match_len2, my $tmotif2) = &TRF_test2 ($ins_cons, $motif2, $chr);
-                            my $match_cov2 = int ($match_len2 / $ins_len * 10 + 0.5) / 10;
-                            if ($match_cov2 >= 0.5){
+                            my $match_cov2 = int ($match_len2 / $ins_len * 100 + 0.5) / 100;
+                            if ($match_cov2 >= 0.6){
                                 my $motif_match_flag = 0;
                                 my $motifx2 = $motif2 . $motif2;
                                 my $tmotifx2 = $tmotif2 . $tmotif2;
@@ -1265,6 +1275,13 @@ while (my $line = <FILE>){
                                     $motif_match_flag = 1;
                                 }
                                 if ($motif_match_flag == 0){
+                                    $match_len2 = 0;
+                                    $match_cov2 = 0;
+                                    my ($ident, $cov, $match) = &multalin_ins2 ($ins_cons, $motif2, $chr);
+                                    if (($ident >= $min_str_identity) and ($match >= $ins_len * $min_str_len_rate)){
+                                        $match_len2 = $match;
+                                    }
+=pod
                                     my $tmotif_size = length $tmotif2;
                                     my ($ident, $cov, $match) = &multalin_ins1 ($ins_cons, $tmotif2, $chr) if ($tmotif_size >= $ins_len);
                                     ($ident, $cov, $match) = &multalin_ins1 ($tmotif2, $ins_cons, $chr) if ($tmotif_size < $ins_len);
@@ -1272,11 +1289,14 @@ while (my $line = <FILE>){
                                         $match_len2 = 0;
                                         $match_cov2 = 0;
                                     }
+=cut
                                 }
                             }
-                            if ($match_cov2 < 0.5){
+                            elsif ($match_cov2 < 0.6){
+                                $match_len2 = 0;
+                                $match_cov2 = 0;
                                 my ($ident, $cov, $match) = &multalin_ins2 ($ins_cons, $motif2, $chr);
-                                if (($ident >= $min_str_identity) and ($match >= $ins_len * $min_str_len_rate) and ($match > $match_len2)){
+                                if (($ident >= $min_str_identity) and ($match >= $ins_len * $min_str_len_rate)){
                                     $match_len2 = $match;
                                 }
                             }
@@ -1297,7 +1317,7 @@ while (my $line = <FILE>){
                         }
                         if ($match_len2 >= $ins_len * 0.5){
                             $alt_str_info = "$sec_str:$motif2:$spos2";
-                            $match_cov2 = int ($match_len2 / $ins_len * 10 + 0.5) / 10;
+                            $match_cov2 = int ($match_len2 / $ins_len * 100 + 0.5) / 100;
                         }
                     }
                 }

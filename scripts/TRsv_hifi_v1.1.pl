@@ -1882,7 +1882,7 @@ foreach my $chr (keys %dup_sv){     # merge DUP overlapping TR with TR-CNV
                 my $dupline = ${${$sv2{$chr}}{$pos}}{'DUP'};
                 my $strid = ${$STR{$chr2}}{$spos};
                 my ($spos2, $send2, $strulen) = split (/=/, $STR2{$strid});
-                my $strlen = $send2 - $spos2 + 1;
+                my $strlen = $send2 - $spos2;
                 my $CN = $1 if ($dupline =~ /CN=([\d\.]+)/);
                 my $expected_slen = $strlen * ($CN - 2);
                 $expected_slen = $strlen if ($expected_slen == 0);
@@ -2552,7 +2552,7 @@ foreach my $chr (sort keys %sv2){   # add TR-DEL located within large DELs and D
                                 my $strid = ${$STR{$chr2}}{$rpos};
                                 my ($rpos2, $rend, $mlen) = split (/=/, $STR2{$strid});
                                 my $cn = int ($del_len / $mlen * 10 + 0.5) / 10;
-                                my $str_line = "$chr2\t$rpos\t.\t.\t<TR:CNV>\t.\tPASS\tSVTYPE=DEL;SVLEN=$del_len;READS=$read;CN=loss-$cn;VRR=$vrr;SAR=$sar;GT=$gt;END=$rend;TRID=$strid;TREND=$rend;TRULEN=$mlen;OVLSV=$pos-$type-$len";
+                                my $str_line = "$chr2\t$rpos\t.\t.\t<CNV:TR>\t.\tPASS\tSVTYPE=DEL;SVLEN=$del_len;READS=$read;CN=loss-$cn;VRR=$vrr;SAR=$sar;GT=$gt;END=$rend;TRID=$strid;TREND=$rend;TRULEN=$mlen;OVLSV=$pos-$type-$len";
                                 ${${$sv2{$chr}}{$rpos}}{'TR'} = $str_line;
                                 $added_str_del ++;
                             }
@@ -2609,7 +2609,7 @@ foreach my $chr (sort keys %sv2){   # add TR-DEL located within large DELs and D
                                 my ($rpos2, $rend, $mlen) = split (/=/, $STR2{$strid});
                                 my $ins_len = $ovl_len * $dup_cn;
                                 my $cn = int ($ins_len / $mlen * 10 + 0.5) / 10 * $dup_cn;
-                                my $str_line = "$chr2\t$rpos\t.\t.\t<TR:CNV>\t.\tPASS\tSVTYPE=INS;SVLEN=$ins_len;READS=$read;CN=gain+$cn;VRR=$vrr;SAR=$sar;GT=$gt;END=$rend;TRID=$strid;TREND=$rend;TRULEN=$mlen;OVLSV=$pos-$type-$len";
+                                my $str_line = "$chr2\t$rpos\t.\t.\t<CNV:TR>\t.\tPASS\tSVTYPE=INS;SVLEN=$ins_len;READS=$read;CN=gain+$cn;VRR=$vrr;SAR=$sar;GT=$gt;END=$rend;TRID=$strid;TREND=$rend;TRULEN=$mlen;OVLSV=$pos-$type-$len";
                                 ${${$sv2{$chr}}{$rpos}}{'TR'} = $str_line;
                                 $added_str_ins ++;
                             }
@@ -2724,6 +2724,8 @@ foreach my $type (sort keys %svtype){
     print STDERR "$type2\t$num\t$num2\n";
 }
 print STDERR "Total\t$total_calls\t$total_high_calls\n";
+system ("rm ma.cfg") if (-f "ma.cfg");
+system ("rm ma.cf~") if (-f "ma.cf~");
 
 
 sub run_step1{
