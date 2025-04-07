@@ -489,11 +489,12 @@ if (@Rtest > 0){
 
 my @yass_result = ();
 my @trf_result = ();
-system ("rm -f $tool_test_dir/multalin_test.cl2") if (-f "$tool_test_dir/multalin_test.cl2");
-system ("rm -f $tool_test_dir/multalin_test.msf") if (-f "$tool_test_dir/multalin_test.msf");
+system ("rm -f multalin_test.cl2") if (-f "multalin_test.cl2");
+system ("rm -f multalin_test.msf") if (-f "multalin_test.msf");
 @yass_result = `yass -O 20 -m 10 -i 10 $tool_test_dir/test1.fasta $tool_test_dir/test2.fasta 2>/dev/null`;
 @trf_result = `trf $tool_test_dir/test1.fasta 2 7 7 80 10 50 2000 -d -l 1 -h -ngs`;
-my @multalin_result = `multalin -q $tool_test_dir/multalin_test.fasta`;
+system ("cp -f $tool_test_dir/multalin_test.fasta ./");
+my @multalin_result = `multalin -q multalin_test.fasta`;
 if (@yass_result < 20){
     die "yass seems not to be properly installed:\n";
 }
@@ -3093,8 +3094,12 @@ if ($filt_flag == 1){
     }
     print STDERR "Total\t$total_calls_filt\t$total_high_calls_filt\n";
 }
+
 system ("rm ma.cfg") if (-f "ma.cfg");
 system ("rm ma.cf~") if (-f "ma.cf~");
+system ("rm -f multalin_test.fasta") if (-f "multalin_test.fasta");
+system ("rm -f multalin_test.cl2") if (-f "multalin_test.cl2");
+system ("rm -f multalin_test.msf") if (-f "multalin_test.msf");
 
 
 sub run_step1{
