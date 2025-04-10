@@ -1209,10 +1209,10 @@ while (my $line = <FILE>){
                         }
                     }
                     else{
+                        my $motifR2 = $motif . $motif;
                         if ($motif_size >= $ins_len){
                             my ($ident, $cov, $match) = (0, 0, 0);
                             if ($ins_len <= 5){
-                                my $motifR2 = $motif . $motif;
                                 if ($motifR2 =~ /$insseq/){
                                     $ident = 100;
                                     $cov = 100;
@@ -1252,14 +1252,15 @@ while (my $line = <FILE>){
                                 }
                             }
                             else{
-                                ($ident, $cov, $match) = &multalin_ins1 ($insseq, $motif, $chr);
+                                ($ident, $cov, $match) = &multalin_ins1 ($insseq, $motifR2, $chr);
                             }
                             if (($ident >= $min_str_identity) and ($match >= $ins_len * $min_str_len_rate)){
                                 $match_len = $match;
                             }
                         }
                         else{
-                            my ($ident, $cov, $match) = &multalin_ins2 ($insseq, $motif, $chr);
+                            my ($ident, $cov, $match) = &multalin_ins2 ($insseq, $motif, $chr) if ($motif_size * 2 <= $ins_len);
+                            ($ident, $cov, $match) = &multalin_ins1 ($insseq, $motifR2, $chr) if ($motif_size * 2 > $ins_len);
                             if (($ident >= $min_str_identity) and ($match >= $ins_len * $min_str_len_rate)){
                                 $match_len = $match;
                             }
@@ -1359,10 +1360,10 @@ while (my $line = <FILE>){
                                 }
                             }
                             else{
+                                my $motifR2 = $motif2 . $motif2;
                                 if ($motif_size2 >= $ins_len){
                                     my ($ident, $cov, $match) = (0, 0, 0);
                                     if ($ins_len <= 5){
-                                        my $motifR2 = $motif2 . $motif2;
                                         if ($motifR2 =~ /$insseq/){
                                             $ident = 100;
                                             $cov = 100;
@@ -1402,14 +1403,15 @@ while (my $line = <FILE>){
                                         }
                                     }
                                     else{
-                                        ($ident, $cov, $match) = &multalin_ins1 ($insseq, $motif2, $chr);
+                                        ($ident, $cov, $match) = &multalin_ins1 ($insseq, $motifR2, $chr);
                                     }
                                     if (($ident >= $min_str_identity) and ($match >= $ins_len * $min_str_len_rate)){
                                         $match_len2 = $match;
                                     }
                                 }
                                 else{
-                                    my ($ident, $cov, $match) = &multalin_ins2 ($insseq, $motif2, $chr);
+                                    my ($ident, $cov, $match) = &multalin_ins2 ($insseq, $motif2, $chr) if ($motif_size2 * 2 > $ins_len);
+                                    ($ident, $cov, $match) = &multalin_ins1 ($insseq, $motifR2, $chr) if ($motif_size2 * 2 > $ins_len);
                                     if (($ident >= $min_str_identity) and ($match >= $ins_len * $min_str_len_rate)){
                                         $match_len2 = $match;
                                     }
@@ -1498,7 +1500,7 @@ while (my $line = <FILE>){
                 push @{$INS_seq{$ipos}}, "$chr:$ipos-$ilen $annot $ins_seq";
                 my $vrr = int ($info / $read_cov * 100 + 0.5) / 100;
                 my ($pos2, $end2) = split (/=/, $STR2{$strid});
-                if (($ipos >= $pos2) and ($ipos <= $end2)){
+                if (($ipos >= $pos2 - 10) and ($ipos <= $end2 + 10)){
                     $str_line = "$chr\t$ipos\tINS\t$ilen\tMEI-$ins_mei,MEILEN-$mei_len,MEICN-$mei_cn;RN-$info;VRR-$vrr;GT-$gt;TR-$strid";
                 }
                 else{
@@ -1510,7 +1512,7 @@ while (my $line = <FILE>){
                 if ($len >= $min_indel_size){
                     my ($pos2, $end2) = split (/=/, $STR2{$strid});
                     my $match_flag2 = 0;
-                    $match_flag2 = 1 if ($ipos >= $pos2) and ($ipos <= $end2);
+                    $match_flag2 = 1 if ($ipos >= $pos2 - 10) and ($ipos <= $end2 + 10);
                     my $vrr = int ($info / $read_cov * 100 + 0.5) / 100;
                     my $ins_len = length $ins_seq;
                     my ($match_cn, $match_motif) = &TRF_test1 ($ins_seq, $chr);
