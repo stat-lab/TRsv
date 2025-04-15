@@ -67,6 +67,8 @@ The Data folder in the TRsv package contains tandem repeat bed files, gap bed fi
 
 Install the required external tools (samtools, yass, multalin, trf, and Rscript). If the executable names are different from 'trf', 'yass', or 'multalin', please rename the executable names to 'trf', 'yass', or 'multalin' (e.g., trf409.linux64 -> trf). Set the path (the directory path containing the executable) to the $PATH environmental variable (e.g. export PATH=/home/tools/yass-1.15/bin:$PATH). Alternatively, specify the options (samtool_path, yass_path, multalin_path, trf_path, and r_path) on TRsv command or in configure file (e.g., --yass_path /home/tools/yass-1.15/bin).  
 
+Alternatively, a singularity container file (TRsv.sif) is available at ##. Run using the singularity TRsv.sif file can be done using a run_TRsv_singularity.pl script in the scripts directory.
+
 ## <a name="hdata"></a>Human and Non-human Data 
 
 By default, TRsv handles WGS alignment data (bam/cram) generated based on the human build 37 reference (GRCh37 or GRCh37d5). To use the data based on the human build 38 reference or T2T-CHM13.v2.0, run the TRsv command with the ‘--build 38’ or '--build T2T' option. When the --build option is specified, specific data files related to the human reference will be automatically selected from the Data folder. If you need to use files other than those in the Data folder, please specify the relevant options, such as --repeat_bed and --exclude_bed. For non-human species, use the option ‘-nh 1’ and use related options such as --repeat_bed, --gap_bed, and --te_fa to specify external input files such as repeat bed, gap bed, TE fasta file, etc.  
@@ -109,6 +111,15 @@ TRsv call -b <bam_file> -r <reference_fasta> -x <platform, hifi|ont|clr> -p <out
   The gap_bed is a bed file describing tab-separated gap regions (chr start end) in each line.  
   The TE_fasta is a fasta file of transposable elements.  
   
+[When using singularity container TRsv.sif] 
+```
+singularity exec -B <list of bind directories for input file path on the host> <absolute path of TRsv sif file> TRsv call -x <platform, hifi|ont|clr> --build <human_ref_build, 37|38|T2T> -r <absolute path of reference fasta> -b <absolute path of bam file> -p <output_prefix> -n <number_of_threads>
+```
+Alternative using run_TRsv_singularity.pl script.  
+```
+run_TRsv_singularity.pl -sif <absolute path of TRsv sif file> -com <TRsv command, call|joint_call|annotate> [other arguments; specified with -x, -b, -r, --build, -p, -n, and other command-specific options]
+```
+The input files must be specified with the absolute path of the real files (not linked files). When using the run_TRsv_singularity.pl script, the bind directories for the input file path (for singularity -B option) are automatically specified in the script.
 
 Other frequently used options are as follows:  
 
@@ -118,7 +129,9 @@ If this is not specified, the value specified with -ml is used for -msl.
 -xc (exclude_chr) <chromosome name(s) to be excluded, comma-separated> (e.g., -xc Y for male sample)  
 -sk (skip) <skip step-1~3> (1: skip step-1, 2: skip step-2, 3: skip step-3, 12: skip steps-1 and -2, 123: skip steps-1, -2, and -3)  
 You can use this option if you want to resume from a step in the middle of the process.  
--rp (r_path) path of R (>= v3.5), where xgboost library has been installed if the corresponding R is not set in $PATH (only non-HiFi data)
+-rp (r_path) path of R (>= v3.5), where xgboost library has been installed if the corresponding R is not set in $PATH (only non-HiFi data)  
+
+
 
 #### Output files  
 
