@@ -25,6 +25,7 @@ The above install directories must be set to PATH or specified with the correspo
   make
   cd ../
   ln -s src/multalin
+  chmod -R 755 $PWD
   export PATH=$PWD:$PATH (setenv PATH $PWD:$PATH # for csh shell)
   export MULTALIN=$PWD (or export MULTALIN=$PWD/matrix) (setenv MULTALIN $PWD # for csh shell)
   ```
