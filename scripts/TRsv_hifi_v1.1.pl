@@ -441,7 +441,7 @@ if (@yass_result < 20){
 if (@trf_result < 2){
     die "trf seems not to be properly installed:\n";
 }
-system("cp $data_dir/blosum62.tab ./");
+system("cp -f $data_dir/blosum62.tab ./");
 foreach (@multalin_result){
     chomp $_;
     if ($_ =~ /Error/){
