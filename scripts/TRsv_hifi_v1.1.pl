@@ -492,14 +492,25 @@ if ($ref_file =~ /(.+)\.gz$/){
     system ("gzip -dc $ref_file > $ref_base");
     $ref_file = $ref_base;
 }
+
 my $ref_index = "$ref_file.fai";
-if (!-f $ref_index){
-    if (!-f $ref_base){
-        system ("ln -s $ref_file");
+if ($ref_file =~ /(.+)\.gz$/){
+    my $ref_file2 = $1;
+    if (!-f "$ref_file2.fai"){
+        my $ref_base = basename ($ref_file2);
+        system ("gzip -dc $ref_file > $ref_base");
+        $ref_file = $ref_base;
+        system ("samtools faidx $ref_file");
+        $ref_index = "$ref_file.fai";
     }
-    system ("samtools faidx $ref_base");
-    $ref_index = "$ref_base.fai";
-    $ref_file = $ref_base;
+    else{
+        $ref_index = "$ref_file2.fai";
+    }
+}
+else{
+    if (!-f $ref_index){
+        system ("samtools faidx $ref_file");
+    }
 }
 
 my $config_file = "$out_prefix.config.txt";
