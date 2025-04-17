@@ -6,6 +6,7 @@ use FindBin qw($Bin);
 my $data_dir = "$Bin/../Data";
 
 my $ref_file = '';
+my $ref_index = '';
 
 my $simple_repeat = '';
 
@@ -121,6 +122,9 @@ while (my $line = <FILE>){
     elsif ($arg eq 'ref_file'){
         $ref_file = $value;
     }
+    elsif ($arg eq 'ref_index'){
+        $ref_index = $value;
+    }
     elsif ($arg eq 'repeat_bed'){
         $simple_repeat = $value;
     }
@@ -232,22 +236,6 @@ my %STR_ME;
 my %STR_motif;
 my %STR_pos;
 my $hg19_flag = 0;
-
-my $ref_file2 = $ref_file;
-$ref_file2 = $1 if ($ref_file2 =~ /(.+)\.gz$/);
-my $ref_index = "$ref_file2.fai";
-if (!-f $ref_index){
-    my $ref_base = $ref_file2;
-    $ref_base = $1 if ($ref_file2 =~ /\/(.+?)$/);
-    if ($ref_file =~ /\.gz$/){
-        system ("gzip -dc $ref_file > $ref_base");
-    }
-    else{
-        system ("ln -s $ref_file");
-    }
-    system ("samtools faidx $ref_base");
-    $ref_index = "$ref_base.fai";
-}
 
 open (FILE, $ref_index) or die "$ref_index is not found: $!\n";while (my $line = <FILE>){
     chomp $line;

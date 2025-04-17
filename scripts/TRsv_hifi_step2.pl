@@ -7,6 +7,7 @@ use FindBin qw($Bin);
 my $data_dir = "$Bin/../Data";
 
 my $ref_file = '';
+my $ref_index = '';
 
 my $simple_repeat = '';
 
@@ -100,6 +101,9 @@ while (my $line = <FILE>){
     }
     elsif ($arg eq 'ref_file'){
         $ref_file = $value;
+    }
+    elsif ($arg eq 'ref_index'){
+        $ref_index = $value;
     }
     elsif ($arg eq 'repeat_bed'){
         $simple_repeat = $value;
@@ -202,22 +206,6 @@ my %STR_motif;
 my %STR_pos;
 my $hg19_flag = 0;
 my $total_STR_len = 0;
-
-my $ref_file2 = $ref_file;
-$ref_file2 = $1 if ($ref_file2 =~ /(.+)\.gz$/);
-my $ref_index = "$ref_file2.fai";
-if (!-f $ref_index){
-    my $ref_base = $ref_file2;
-    $ref_base = $1 if ($ref_file2 =~ /\/(.+?)$/);
-    if ($ref_file =~ /\.gz$/){
-        system ("gzip -dc $ref_file > $ref_base");
-    }
-    else{
-        system ("ln -s $ref_file");
-    }
-    system ("samtools faidx $ref_base");
-    $ref_index = "$ref_base.fai";
-}
 
 open (FILE, $ref_index) or die "$ref_index is not found: $!\n";while (my $line = <FILE>){
     chomp $line;
@@ -365,6 +353,7 @@ while (my $line = <FILE>){
                 next if ($strand eq 'BP');
                 $id = $1 if ($id =~ /(.+)~[35]$/);
                 $id{$id} = "$ilen=$rpos=$strand";
+print STDERR "$chr $pos $info\n" if (!defined $ipos);
                 my $dist = abs ($pos - $ipos);
                 $ilen = int ($ilen / 2) * 2;
                 push @{${$idist{$dist}}{$ilen}}, $id;
@@ -1131,6 +1120,7 @@ while (my $line = <FILE>){
             my $ins_cn = 0;
             foreach my $insseq (@ins_seq){
                 if (length $insseq >= $min_ins_str_mei){
+                    my $inslen = length $insseq;
                     my ($me_type, $overlaplen, $cn) = &find_me ($insseq, $chr, $pos, $strid);
                     if ($overlaplen > 0){
                         my $str_motif = $STR_motif{$strid};
@@ -1171,6 +1161,7 @@ while (my $line = <FILE>){
                     elsif (($ins_len >= $motif_size * 2) and ($motif_size > 4)){
                         ($match_len, my $tmotif) = &TRF_test2 ($insseq, $motif, $chr);
                         my $match_cov1 = int ($match_len / $ins_len * 100 + 0.5) / 100;
+print STDERR "TRF-test: $pos $strid $ins_len: $match_len $match_cov1\n" if ($pos == 3037750) or ($pos == 143223616);
                         if ($match_cov1 >= 0.6){
                             my $motif_match_flag = 0;
                             my $motifx2 = $motif . $motif;
@@ -1184,25 +1175,26 @@ while (my $line = <FILE>){
                             if ($motif_match_flag == 0){
                                 $match_len = 0;
                                 $match_cov1 = 0;
+                                my $tmotif_size = length $tmotif;
                                 my ($ident, $cov, $match) = &multalin_ins2 ($insseq, $motif, $chr);
+#                               my ($ident, $cov, $match) = &multalin_ins1 ($insseq, $tmotif, $chr) if ($tmotif_size >= $ins_len);
+#                                ($ident, $cov, $match) = &multalin_ins1 ($tmotif, $insseq, $chr) if ($tmotif_size < $ins_len);
+print STDERR "$pos $strid $ins_len: $motif $tmotif\n" if ($pos == 3037750) or ($pos == 143223616);
+print STDERR "Multalin-test1: $pos $strid $ins_len: $match $cov $ident\n" if ($pos == 3037750) or ($pos == 143223616);
+#                                if (($ident < $min_str_identity) or ($cov < 80)){
+#                                    $match_len = 0;
+#                                    $match_cov1 = 0;
+#                                }
                                 if (($ident >= $min_str_identity) and ($match >= $ins_len * $min_str_len_rate)){
                                     $match_len = $match;
                                 }
-=pod
-                                my $tmotif_size = length $tmotif;
-                                my ($ident, $cov, $match) = &multalin_ins1 ($insseq, $tmotif, $chr) if ($tmotif_size >= $ins_len);
-                                ($ident, $cov, $match) = &multalin_ins1 ($tmotif, $insseq, $chr) if ($tmotif_size < $ins_len);
-                                if (($ident < $min_str_identity) or ($cov < 80)){
-                                    $match_len = 0;
-                                    $match_cov1 = 0;
-                                }
-=cut
                             }
                         }
                         elsif ($match_cov1 < 0.6){
                             $match_len = 0;
                             $match_cov1 = 0;
                             my ($ident, $cov, $match) = &multalin_ins2 ($insseq, $motif, $chr);
+print STDERR "Multalin-test2: $pos $strid $ins_len: $match $cov $ident\n" if ($pos == 3037750) or ($pos == 143223616);
                             if (($ident >= $min_str_identity) and ($match >= $ins_len * $min_str_len_rate)){
                                 $match_len = $match;
                             }
@@ -1277,6 +1269,7 @@ while (my $line = <FILE>){
                 my $match_cov1 = 0;
                 my $match_cov2 = 0;
                 $match_cov1 = int ($sum_ins_match_len / $sum_ins_len * 100 + 0.5) / 100 if ($sum_ins_len > 0);
+print STDERR "Match-cov: $pos $strid $sum_ins_len: $match_cov1\n" if ($pos == 3037750) or ($pos == 143223616);
                 if ($match_cov1 < 0.8){
                     if ($sec_str eq 'NA'){
                         my $ibin = int ($ipos / $Mbin_size);
@@ -1333,21 +1326,19 @@ while (my $line = <FILE>){
                                         $motif_match_flag = 1;
                                     }
                                     if ($motif_match_flag == 0){
+                                        my $tmotif_size = length $tmotif2;
                                         $match_len2 = 0;
                                         $match_cov2 = 0;
                                         my ($ident, $cov, $match) = &multalin_ins2 ($insseq, $motif2, $chr);
                                         if (($ident >= $min_str_identity) and ($match >= $ins_len * $min_str_len_rate)){
                                             $match_len2 = $match;
                                         }
-=pod
-                                        my $tmotif_size = length $tmotif2;
-                                        my ($ident, $cov, $match) = &multalin_ins1 ($insseq, $tmotif2, $chr) if ($tmotif_size >= $ins_len);
-                                        ($ident, $cov, $match) = &multalin_ins1 ($tmotif2, $insseq, $chr) if ($tmotif_size < $ins_len);
-                                        if (($ident < $min_str_identity) or ($cov < 80)){
-                                            $match_len2 = 0;
-                                            $match_cov2 = 0;
-                                        }
-=cut
+#                                        my ($ident, $cov, $match) = &multalin_ins1 ($insseq, $tmotif2, $chr) if ($tmotif_size >= $ins_len);
+#                                        ($ident, $cov, $match) = &multalin_ins1 ($tmotif2, $insseq, $chr) if ($tmotif_size < $ins_len);
+#                                        if (($ident < $min_str_identity) or ($cov < 80)){
+#                                            $match_len2 = 0;
+#                                            $match_cov2 = 0;
+#                                        }
                                     }
                                 }
                                 elsif ($match_cov2 < 0.6){

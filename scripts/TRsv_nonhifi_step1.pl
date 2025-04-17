@@ -6,6 +6,7 @@ use FindBin qw($Bin);
 my $data_dir = "$Bin/../Data";
 
 my $ref_file = '';
+my $ref_index = '';
 
 my $simple_repeat = '';
 
@@ -124,6 +125,9 @@ while (my $line = <FILE>){
     elsif ($arg eq 'ref_file'){
         $ref_file = $value;
     }
+    elsif ($arg eq 'ref_index'){
+        $ref_index = $value;
+    }
     elsif ($arg eq 'repeat_bed'){
         $simple_repeat = $value;
     }
@@ -201,22 +205,6 @@ my $str_min_len_rate = int (1 / $str_max_len_rate * 100 + 0.5) / 100;
 
 my $temp_dir = "$out_prefix.temp";
 system ("mkdir $temp_dir") if (!-d $temp_dir);
-
-my $ref_file2 = $ref_file;
-$ref_file2 = $1 if ($ref_file2 =~ /(.+)\.gz$/);
-my $ref_index = "$ref_file2.fai";
-if (!-f $ref_index){
-    my $ref_base = $ref_file2;
-    $ref_base = $1 if ($ref_file2 =~ /\/(.+?)$/);
-    if ($ref_file =~ /\.gz$/){
-        system ("gzip -dc $ref_file > $ref_base");
-    }
-    else{
-        system ("ln -s $ref_file");
-    }
-    system ("samtools faidx $ref_base");
-    $ref_index = "$ref_base.fai";
-}
 
 if ($platform eq 'pacbio'){
     $min_del_size = 30;

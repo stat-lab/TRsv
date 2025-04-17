@@ -501,6 +501,7 @@ if (@yass_result < 20){
 if (@trf_result < 2){
     die "trf seems not to be properly installed:\n";
 }
+
 system("cp -f $data_dir/blosum62.tab ./");
 foreach (@multalin_result){
     chomp $_;
@@ -512,6 +513,8 @@ if (!-f "$temp_dir/multalin_test.msf"){
     die "multalin seems not to be properly installed or MULTALIN environment variable is not set:\n";
 }
 
+my $ref_index = "$ref_file.fai";
+
 if ($non_human == 0){
     $TE_fasta = "$data_dir/TE.fa";
     if ($build eq '37'){
@@ -519,6 +522,9 @@ if ($non_human == 0){
         $simple_repeat_unanalyzed = "$data_dir/simpleRepeat.b37.ov10K.bed.gz" if ($simple_repeat_unanalyzed eq '');
         $lowconf_TR = "$data_dir/Low-confidence_TR-ov10Kb_region_b37.txt" if ($lowconf_TR eq '');
         $gap_bed = "$data_dir/gap.bed" if ($gap_bed eq '');
+        if (!-f $ref_index){
+            $ref_index = "$data_dir/hs37.fa.fai";
+        }
     }
     if ($build eq '38'){
         $simple_repeat = "$data_dir/simpleRepeat.b38.20-10000.addHip.ME.bed.gz" if ($simple_repeat eq '');
@@ -526,16 +532,40 @@ if ($non_human == 0){
         $lowconf_TR = "$data_dir/Low-confidence_TR-ov10Kb_region_b38.txt" if ($lowconf_TR eq '');
         $exclude_bed = "$data_dir/hg38.centromere.bed" if ($exclude_bed eq '');
         $gap_bed = "$data_dir/gap.b38.bed" if ($gap_bed eq '');
+        if (!-f $ref_index){
+            $ref_index = "$data_dir/hs38.fa.fai";
+        }
     }
     elsif ($build eq 'T2T'){
         $simple_repeat = "$data_dir/simpleRepeat.t2t-chm13.20-10000.ME.bed.gz" if ($simple_repeat eq '');
         $simple_repeat_unanalyzed = "$data_dir/simpleRepeat.t2t-chm13.v2.0.ov10K.bed.gz" if ($simple_repeat_unanalyzed eq '');
         $lowconf_TR = "$data_dir/Low-confidence_TR-ov10Kb_region_T2T.txt" if ($lowconf_TR eq '');
         $exclude_bed = "$data_dir/chm13.v2.0.centromere.bed" if ($exclude_bed eq '');
+        if (!-f $ref_index){
+            $ref_index = "$data_dir/chm13v2.0.fa.fai";
+        }
     }
 }
 else{
     die "repeat_bed file is not specified or not present:\n" if ($simple_repeat eq '') or (!-f $simple_repeat);
+    if (!-f $ref_index){
+        if ($ref_file =~ /(.+)\.gz$/){
+            my $ref_file2 = $1;
+            if (!-f "$ref_file2.fai"){
+                my $ref_base = basename ($ref_file);
+                system ("gzip -dc $ref_file > $ref_base");
+                $ref_file = $ref_base;
+                system ("samtools faidx $ref_file");
+                $ref_index = "$ref_file.fai";
+            }
+            else{
+                $ref_index = "$ref_file2.fai";
+            }
+        }
+        else{
+            system ("samtools faidx $ref_file");
+        }
+    }
 }
 
 if ($min_str_indel_size == 0){
@@ -569,30 +599,11 @@ if ($min_indel_size < 20){
     die "Aborted due to parameter setting restrictions of --min_len $min_indel_size (should be >= 20):\n";
 }
 
-my $ref_index = "$ref_file.fai";
-if ($ref_file =~ /(.+)\.gz$/){
-    my $ref_file2 = $1;
-    if (!-f "$ref_file2.fai"){
-        my $ref_base = basename ($ref_file);
-        system ("gzip -dc $ref_file > $ref_base");
-        $ref_file = $ref_base;
-        system ("samtools faidx $ref_file");
-        $ref_index = "$ref_file.fai";
-    }
-    else{
-        $ref_index = "$ref_file2.fai";
-    }
-}
-else{
-    if (!-f $ref_index){
-        system ("samtools faidx $ref_file");
-    }
-}
-
 my $config_file = "$out_prefix.config.txt";
 open (OUT, "> $config_file");
 print OUT "bam_file\t$bam_file\n";
 print OUT "ref_file\t$ref_file\n";
+print OUT "ref_index\t$ref_index\n";
 print OUT "repeat_bed\t$simple_repeat\n";
 print OUT "te_fasta\t$TE_fasta\n";
 print OUT "gap_bed\t$gap_bed\n";
