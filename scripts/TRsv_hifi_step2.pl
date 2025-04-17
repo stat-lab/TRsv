@@ -1161,7 +1161,6 @@ while (my $line = <FILE>){
                     elsif (($ins_len >= $motif_size * 2) and ($motif_size > 4)){
                         ($match_len, my $tmotif) = &TRF_test2 ($insseq, $motif, $chr);
                         my $match_cov1 = int ($match_len / $ins_len * 100 + 0.5) / 100;
-print STDERR "TRF-test: $pos $strid $ins_len: $match_len $match_cov1\n" if ($pos == 3037750) or ($pos == 143223616);
                         if ($match_cov1 >= 0.6){
                             my $motif_match_flag = 0;
                             my $motifx2 = $motif . $motif;
@@ -1179,8 +1178,6 @@ print STDERR "TRF-test: $pos $strid $ins_len: $match_len $match_cov1\n" if ($pos
                                 my ($ident, $cov, $match) = &multalin_ins2 ($insseq, $motif, $chr);
 #                               my ($ident, $cov, $match) = &multalin_ins1 ($insseq, $tmotif, $chr) if ($tmotif_size >= $ins_len);
 #                                ($ident, $cov, $match) = &multalin_ins1 ($tmotif, $insseq, $chr) if ($tmotif_size < $ins_len);
-print STDERR "$pos $strid $ins_len: $motif $tmotif\n" if ($pos == 3037750) or ($pos == 143223616);
-print STDERR "Multalin-test1: $pos $strid $ins_len: $match $cov $ident\n" if ($pos == 3037750) or ($pos == 143223616);
 #                                if (($ident < $min_str_identity) or ($cov < 80)){
 #                                    $match_len = 0;
 #                                    $match_cov1 = 0;
@@ -1194,7 +1191,6 @@ print STDERR "Multalin-test1: $pos $strid $ins_len: $match $cov $ident\n" if ($p
                             $match_len = 0;
                             $match_cov1 = 0;
                             my ($ident, $cov, $match) = &multalin_ins2 ($insseq, $motif, $chr);
-print STDERR "Multalin-test2: $pos $strid $ins_len: $match $cov $ident\n" if ($pos == 3037750) or ($pos == 143223616);
                             if (($ident >= $min_str_identity) and ($match >= $ins_len * $min_str_len_rate)){
                                 $match_len = $match;
                             }
@@ -1269,7 +1265,6 @@ print STDERR "Multalin-test2: $pos $strid $ins_len: $match $cov $ident\n" if ($p
                 my $match_cov1 = 0;
                 my $match_cov2 = 0;
                 $match_cov1 = int ($sum_ins_match_len / $sum_ins_len * 100 + 0.5) / 100 if ($sum_ins_len > 0);
-print STDERR "Match-cov: $pos $strid $sum_ins_len: $match_cov1\n" if ($pos == 3037750) or ($pos == 143223616);
                 if ($match_cov1 < 0.8){
                     if ($sec_str eq 'NA'){
                         my $ibin = int ($ipos / $Mbin_size);
@@ -2410,7 +2405,6 @@ sub yass_align_inv{
     my $mismatch_count = 0;
     foreach my $line (@result){
         chomp $line;
-#print STDERR "$line\n";# if ($pos == 64637275) or ($pos == 68357399); 
         if (($line =~ /\*\((\d+)-(\d+)\)\((\d+)-(\d+)\)/) and ($match_flag == 0)){
             $match_flag = 1;
             if ($1 < $2){
