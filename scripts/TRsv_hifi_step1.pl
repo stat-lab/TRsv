@@ -360,6 +360,7 @@ my %bam_str_bp1;
 my %bam_str_bp2;
 my %bam_ins_Q0;
 my %overlap_str_opt;
+my %read_bp_primary;
 
 my %gap;
 my %DP;
@@ -407,9 +408,11 @@ while (my $line = <FILE>){
     my $flag = 0;
     my $strand = 'F';
     my $sec_align = 0;
+    my $supplement = 0;
     my $exclude_overlap_flag = 0;
     if ($tag >= 2048){
         $tag -= 2048;
+        $supplement = 1;
     }
     if ($tag >= 1024){
         $tag -= 1024;
@@ -483,6 +486,7 @@ while (my $line = <FILE>){
                 push @{$bam_bp2{$pos}}, "$read_id=$strand=$sublen=$tag=$map_len" if (!exists ${$gap_bp{$chr}}{$pos});
                 ${$read_bp2{$read_id}}{$pos} = "$map_len=$sublen=$cigar=$strand" if (!exists ${$gap_bp{$chr}}{$pos});
                 ${$shortmap{$read_id}}{$pos} = 1 if ($map_len < 1000);
+                ${$read_bp_primary{$read_id}}{$pos} = 1 if ($supplement == 0);
             }
             $read_pos += $sublen;
             next;
@@ -527,6 +531,7 @@ while (my $line = <FILE>){
                 ${$read_bp1{$read_id}}{$end} = "$read_pos=$sublen=$cigar=$strand";
             }
             ${$shortmap{$read_id}}{$end} = 1 if ($map_len < 1000);
+            ${$read_bp_primary{$read_id}}{$end} = 1 if ($supplement == 0);
             if (($S5_flag >= $max_sublen) and ($S3_flag >= $max_sublen) and (!exists ${$gap_bp{$chr}}{$end})){
                 my $len = $end - $pos + 1;
                 ${${$read_2bp{$read_id}}{$pos}}{$end} = 1;
@@ -4256,9 +4261,30 @@ foreach my $bp1 (sort {$a <=> $b} keys %dup_clust){
     $select_sbp2 = $sbp2[$bp2_h];
 
     my $info2 = '';
+    my $bp_read = 0;
+    my $prim_read = 0;
     foreach my $info (@{${$dup_clust{$bp1}}{$bp2}}){
         $info2 .= "$info|";
+        $bp_read ++;
+        my ($read_id) = split (/=/, $info);
+        my $flag = 0;
+        for (my $i = $bp1 - 50; $i <= $bp1 + 50; $i++){
+            if (exists ${$read_bp_primary{$read_id}}{$i}){
+                $flag = 1;
+                last;
+            }
+        }
+        if ($flag == 0){
+            for (my $i = $bp2 - 50; $i <= $bp2 + 50; $i++){
+                if (exists ${$read_bp_primary{$read_id}}{$i}){
+                    $flag = 1;
+                    last;
+                }
+            }
+        }
+        $prim_read ++ if ($flag == 1);
     }
+    next if ($prim_read / $bp_read < 0.2);
     $info2 =~ s/\|$//;
     ${$bam_dup{$select_sbp1}}{$select_sbp2} = $info2;
 }
