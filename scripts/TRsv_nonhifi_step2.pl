@@ -1117,10 +1117,6 @@ while (my $line = <FILE>){
     }
     elsif ($type =~ /TR-/){
         my ($read_cov, $unit_size, $read_info, $insbp, $dpr, $sec_str) = split (/=/, $dp_str);
-        my @read_info = split (/\|/, $read_info);
-        my $read_info2 = $read_info[0];
-        my ($readid, $read_info3, $ipos) = split (/~/, $read_info2);
-#        my ($rpos, $ilen, $strand) = split (/-/, $read_info3);
         $dpr = 0 if (!defined $dpr);
         my $strid = $STR{$pos};
         my ($spos, $send, $motif_size, $motif) = split (/=/, $STR2{$strid});
@@ -1148,6 +1144,10 @@ while (my $line = <FILE>){
             }
         }
         if (($type =~ /TR-ins/) and (exists ${$ins_str_seq{$pos}}{$ins_num}) and ($dpr < 1.2)){
+            my @read_info = split (/\|/, $read_info);
+            my $read_info2 = $read_info[0];
+            my ($readid, $read_info3, $ipos) = split (/~/, $read_info2);
+#           my ($rpos, $ilen, $strand) = split (/-/, $read_info3);
             my $match_flag = 0;
             my $hit_strid = '';
             my $ins_seq = '';
