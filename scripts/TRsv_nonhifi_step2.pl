@@ -637,6 +637,7 @@ my %INS_seq;
 my %INS_undef;
 my $STRins_multi = 0;
 my $STRins_multi_match = 0;
+my $del_count = 0;
 
 open (OUTD, "> $out_file");
 open (FILE, $step1_out) or die "$step1_out is not found: $!\n";
@@ -1025,6 +1026,11 @@ while (my $line = <FILE>){
         print OUTD "$chr\t$pos\tDUP\t$len\t$dup_info;RN-$read_num;mTD-$ave_mTD;DPR-$dprate;VRR-$dup_rate;GT-$gt\n" if ($dup_info ne '');
     }
     elsif ($type eq 'DEL'){
+        $del_count ++;
+        if ($del_count == 1){
+            undef %ins_pos_seq;
+            undef %ins_bp_seq;
+        }
         my $read_num = $info;
         my ($dp_rate, $flank_dp, $del_rate, $bp_read)  = split (/,/, $dp2);
         if (($flank_dp > 0) and ($len < 500)){
