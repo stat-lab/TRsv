@@ -236,6 +236,7 @@ my %STR_ME;
 my %STR_motif;
 my %STR_pos;
 my $hg19_flag = 0;
+my $total_STR_len = 0;
 
 open (FILE, $ref_index) or die "$ref_index is not found: $!\n";while (my $line = <FILE>){
     chomp $line;
@@ -311,8 +312,8 @@ if ($TE_fasta ne ''){
 my %seq;
 my $header = '';
 my $seq = '';
-
 my $Mb_count = 0;
+
 open (FILE, $ref_file) or die "$ref_file is not found: $!\n" if ($ref_file !~ /\.gz$/);
 open (FILE, "gzip -dc $ref_file |") or die "$ref_file is not found: $!\n" if ($ref_file =~ /\.gz$/);
 while (my $line = <FILE>){
@@ -382,27 +383,33 @@ while (my $line = <FILE>){
                 my ($id, $strand, $ilen, $rpos, $ipos) = split (/=/, $info3);
                 next if ($strand eq 'BP');
                 $id = $1 if ($id =~ /(.+)~[35]$/);
+                $id{$id} = "$ilen=$rpos=$strand";
+print STDERR "$chr $pos $info\n" if (!defined $ipos);
                 my $dist = abs ($pos - $ipos);
-                my $ilen2 = int ($ilen / 5) * 5;
-                push @{${$idist{$dist}}{$ilen2}}, "$id=$ilen=$rpos=$strand";
+                $ilen = int ($ilen / 2) * 2;
+                push @{${$idist{$dist}}{$ilen}}, $id;
             }
-            my $icount = 0;
-            my $iflag = 0;
+            my $select_id1 = '';
+            my $select_id2 = '';
             foreach my $dist (sort {$a <=> $b} keys %idist){
                 foreach my $len (sort {scalar @{${$idist{$dist}}{$b}} <=> scalar @{${$idist{$dist}}{$a}}} keys %{$idist{$dist}}){
-                    foreach my $id_info (@{${$idist{$dist}}{$len}}){
-                        my ($id, $ilen, $rpos, $strand) = split (/=/, $id_info);
-                        ${$ins_pos_id{$id}}{$pos} = "$ilen=$rpos=$strand";
-                        $read_id{$id} = 1;
-                        $icount ++;
-                        if ($icount == 5){
-                            $iflag = 1;
+                    foreach my $id (@{${$idist{$dist}}{$len}}){
+                        if ($select_id1 eq ''){
+                            $select_id1 = $id;
+                            last if ($len >= 100);
+                        }
+                        elsif ($select_id2 eq ''){
+                            $select_id2 = $id;
                             last;
                         }
                     }
-                    last if ($iflag == 1);
                 }
-                last if ($iflag == 1);
+            }
+            ${$ins_pos_id{$select_id1}}{$pos} = $id{$select_id1};
+            $read_id{$select_id1} = 1;
+            if ($select_id2 ne ''){
+                ${$ins_pos_id{$select_id1}}{$pos + 1} = $id{$select_id2};
+                $read_id{$select_id2} = 1;
             }
         }
         else{
@@ -436,25 +443,24 @@ while (my $line = <FILE>){
             $read_id{$clip5_id} = 1;
             $read_id{$clip3_id} = 1;
         }
-        
     }
     elsif ($type =~ /TR-ins/){
         my $strid = $STR{$pos};
         $ins_strID{$strid} = 1;
         my @info2 = split (/=/, $info2);
         if (@info2 >= 4){
-            my @id_info = split (/\|/, $info2[2]);
-            foreach my $inf (@id_info){
-                my ($id, $inf2, $ipos) = split (/~/, $inf);
-                next if ($inf eq 'NA');
-                if (($type eq 'TR-ins') or ($type eq 'TR-ins1')){
-                    ${${$ins_str_id{$id}}{$pos}}{1} = "$inf2==$ipos";
-                }
-                elsif ($type eq 'TR-ins2'){
-                    ${${$ins_str_id{$id}}{$pos}}{2} = "$inf2==$ipos";
-                }
-                $read_id{$id} = 1;
+            my $inf2 = $info2[2];
+            my @inf2_2 = split (/\|/, $inf2);
+            my $inf2_2 = $inf2_2[0];
+            my ($id, $inf3) = split (/~/, $inf2_2);
+            next if ($id eq 'NA');
+            if (($type eq 'TR-ins') or ($type eq 'TR-ins1')){
+                ${${$ins_str_id{$id}}{$pos}}{1} = $inf3;
             }
+            elsif ($type eq 'TR-ins2'){
+                ${${$ins_str_id{$id}}{$pos}}{2} = $inf3;
+            }
+            $read_id{$id} = 1 if ($id ne '');
         }
     }
     elsif ($type eq 'INV'){
@@ -467,10 +473,20 @@ while (my $line = <FILE>){
             }
         }
     }
+    elsif ($type eq 'REP-BP'){
+        next if ($info eq '1,1');
+        my @info = split (/\|/, $info2);
+        foreach (@info){
+            my ($id) = split (/~/, $_);
+            $read_id{$id} = 1;
+        }
+    }
 }
 close (FILE);
 
+
 my $chr = $target_chr;
+
 open (FILE, "samtools view $bam_file $chr |") or die "$bam_file is not found:$!\n" if ($bam_file =~ /\.bam$/);
 open (FILE, "samtools view -S $bam_file $chr |") or die "$bam_file is not found:$!\n" if ($bam_file =~ /\.sam$/);
 open (FILE, "samtools view --reference $ref_file $bam_file $chr |") or die "$bam_file is not found:$!\n" if ($bam_file =~ /\.cram$/);
@@ -511,30 +527,29 @@ while (my $line = <FILE>){
     }
     next if ($sec_align == 1);
     my $seq = $line[9];
-    my $pos = $line[3];
     if (exists $ins_pos_id{$read_id}){
         foreach my $ipos (keys %{$ins_pos_id{$read_id}}){
             my ($ilen, $rpos, $istrand) = split (/=/, ${$ins_pos_id{$read_id}}{$ipos});
             next if ($strand ne $istrand);
             next if ($rpos + $ilen > length $seq);
             my $ins_seq = substr ($seq, $rpos, $ilen);
-            push @{$ins_pos_seq{$ipos}}, $ins_seq if (length $ins_seq >= 20);
+            $ins_pos_seq{$ipos} = $ins_seq;
         }
     }
     if (exists $ins_str_id{$read_id}){
         foreach my $ipos (keys %{$ins_str_id{$read_id}}){
             foreach my $num (keys %{${$ins_str_id{$read_id}}{$ipos}}){
-                my ($info, $ipos) = split (/==/, ${${$ins_str_id{$read_id}}{$ipos}}{$num});
-                my @info = split (/,/, $info);
+                my @info = split (/,/, ${${$ins_str_id{$read_id}}{$ipos}}{$num});
                 my $ins_seq = '';
                 foreach my $inf (@info){
                     my ($rpos, $ilen, $istrand) = split (/-/, $inf);
                     next if ($strand ne $istrand);
                     next if ($rpos + $ilen > length $seq);
                     my $insseq = substr ($seq, $rpos, $ilen);
-                    $ins_seq .= $insseq;
+                    $ins_seq .= "$insseq-";
                 }
-                push @{${$ins_str_seq{$ipos}}{$num}}, "$ipos=$ins_seq" if (length $ins_seq >= 20);
+                $ins_seq =~ s/-$// if ($ins_seq =~ /-$/);
+                ${$ins_str_seq{$ipos}}{$num} = $ins_seq;
             }
         }
     }
@@ -604,6 +619,7 @@ while (my $line = <FILE>){
     }
 }
 close (FILE);
+
 undef %read_id;
 undef %ins_pos_id;
 undef %ins_bp_id;
@@ -616,21 +632,21 @@ my $ins_out = $step1_out;
 $ins_out =~ s/\.txt$//;
 $ins_out .= '.INS.fa';
 my $ins_undef_fasta = "$temp_dir/Z.$chr.INS-undefined.fa";
-
 my %INS_result;
 my %INS_seq;
 my %INS_undef;
+my $STRins_multi = 0;
+my $STRins_multi_match = 0;
 
 open (OUTD, "> $out_file");
 open (FILE, $step1_out) or die "$step1_out is not found: $!\n";
 while (my $line = <FILE>){
     chomp $line;
-    my ($chr, $pos, $type, $len, $info, $dp_str, $q0dprate) = split (/\t/, $line);
     my $gt = 'NA';
+    my ($chr, $pos, $type, $len, $info, $dp_str, $dp2) = split (/\t/, $line);
     if ($type =~ /INS/){
-        my $ilen = 0;
-        my ($read_num, $dp, $ins_rate, $bp_read) = split (/,/, $dp_str);
-        next if ($ins_rate < $min_VRR);
+        my ($read_num, $dp, $ins_rate, $bp_read, $bplen, $dprate) = split (/,/, $dp_str);
+        $bplen = 0 if (!defined $bplen);
         if ($dp > 0){
             if ($ins_rate >= 0.7){
                 $gt = 'HM';
@@ -646,14 +662,18 @@ while (my $line = <FILE>){
         my $ins_seq2 = '';
         my $insbp_len = '';
         my $insbp_overlap = 0;
-        my $seq_num = 0;
+        
         if ($type eq 'INS-BP2'){
-            next if ($ins_rate < $min_VRR);
+#                next if ($ins_rate < $min_VRR);
+            $dprate = $dp;
             my $clipseq_3T = '';
             my $clipseq_5T = '';
             $clipseq_3T = ${$ins_bp_seq{$pos}}{'3T'} if (exists ${$ins_bp_seq{$pos}}{'3T'});
             $clipseq_5T = ${$ins_bp_seq{$pos}}{'5T'} if (exists ${$ins_bp_seq{$pos}}{'5T'});
-            next if ($clipseq_3T eq '') or ($clipseq_5T eq '');
+            if (($clipseq_3T eq '') or ($clipseq_5T eq '')){
+                print STDERR "INS-BP2: $chr:$pos no-clipped sequences available\n";
+                next;
+            }
             my ($match, $insseq) = &find_overlap ($clipseq_3T, $clipseq_5T, $chr, $pos); # check end-to-end alignment between 3'-clipped sequence and 5'-clipped sequence
             if ($match == 1){
                 $ins_seq = $insseq;
@@ -663,11 +683,8 @@ while (my $line = <FILE>){
                 $ins_seq = $clipseq_3T;
                 $ins_seq = $clipseq_5T if (length $clipseq_3T <= length $clipseq_5T);
             }
-            $ilen = length $ins_seq;
-            $len = $ilen;
+            $len = length $ins_seq if ($ins_seq ne '');
             $len = 0 if ($match == 0);
-            $insbp_len = "$ilen(P)";
-            $insbp_len = "$ilen(F)" if ($match == 1);
             if (exists $INS_result{$pos}){
                 my $pre_bp = 0;
                 my $pre_result = $INS_result{$pos};
@@ -682,19 +699,15 @@ while (my $line = <FILE>){
                 }
                 next;
             }
-            if ($q0dprate =~ /DUP-(\d+)/){
+            if ($dp2 =~ /DUP-(\d+)/){
                 $ins_annot{'BP'} = "0=$1=DUP";
             }
-            elsif ($q0dprate =~ /DEL-(\d+)/){
+            elsif ($dp2 =~ /DEL-(\d+)/){
                 $ins_annot{'BP'} = "0=$1=DEL";
             }
         }
         else{
-            if (exists $ins_pos_seq{$pos}){
-                ($ins_seq, $seq_num) = &get_consensus ($chr, $pos);
-            }
-            next if ($ins_seq eq '');
-            $ilen = length $ins_seq;
+            $ins_seq = $ins_pos_seq{$pos} if (exists $ins_pos_seq{$pos});
         }
         my $BP = 0;
         if ($type =~ /BP/){
@@ -703,8 +716,16 @@ while (my $line = <FILE>){
         else{
             $BP = $bp_read if (defined $bp_read);
         }
-        if ($dup_find == 1){
+        if ($ins_seq eq ''){
+            $INS_result{$pos} = "$chr\t$pos\t$type\t$len\tRN-$read_num;VRR-$ins_rate;GT-$gt;BP-$BP";
+            next;
+        }
+        if (($dup_find == 1) and ($len >= 20)){
             my ($dup_pos1, $dup_pos2, $direction) = &find_dup_1 ($ins_seq, 'tdup', $chr, $pos);
+            if (($len < 100) and ($dup_pos1 == 0) and (exists ${$ins_pos_seq{$chr}}{$pos + 1})){
+                my $ins_seq2 = ${$ins_pos_seq{$chr}}{$pos + 1};
+                ($dup_pos1, $dup_pos2, $direction) = &find_dup_1 ($ins_seq2, 'tdup', $chr, $pos);
+            }
             if ($dup_pos1 > 0){
                 my $duplen = $dup_pos2 - $dup_pos1 + 1;
                 $ins_annot{'DUP'} = "$dup_pos1=$duplen=$direction";
@@ -714,7 +735,7 @@ while (my $line = <FILE>){
         }
         if (($mei_find == 1) and (@TE > 0) and ($len >= 90)){
             my ($me_type, $overlaplen, $cn, $sec_me) = &find_me ($ins_seq, $chr, $pos, 'NA');
-            if ($overlaplen> 0){
+            if ($overlaplen > 0){
                 $ins_annot{'ME'} = "$me_type=$overlaplen=$cn=$sec_me";
             }
         }
@@ -759,7 +780,6 @@ while (my $line = <FILE>){
                     my $send = ${$STR_pos{$ibin}}{$spos};
                     next if ($send < $pos - 50);
                     my $strid2 = $STR{$spos};
-                    next if ($strid2 eq $strid);
                     my $diff = 0;
                     if (($pos >= $spos) and ($pos <= $send)){
                         $diff = $pos - $spos;
@@ -837,6 +857,7 @@ while (my $line = <FILE>){
                         else{
                             $str_flag = 1;
                             $ins_cn = int ($match_len / $motif_size * 10 + 0.5) / 10;
+                            $ins_cn = int ($match_len / $motif_size * 100 + 0.5) / 100 if ($ins_cn == 0);
                             if ($ins_cn < $min_str_cn){
                                 $str_flag = 0;
                             }
@@ -859,6 +880,12 @@ while (my $line = <FILE>){
                 }
             }
         }
+        if ($bplen > 0){
+            $annot .= "BPLEN2-$bplen;";
+        }
+        if ($dprate > 0){
+            $annot .= "DPR-$dprate;";
+        }
         $annot =~ s/;$// if ($annot =~ /;$/);
         $annot2 =~ s/,$// if ($annot2 =~ /,$/);
         if ($annot eq ''){
@@ -871,9 +898,8 @@ while (my $line = <FILE>){
         if ($ins_seq ne ''){
             $annot2 = 'unknown' if ($annot2 eq '');
             $annot2 = 'unknown,INS-BP2(partial)' if ($annot2 eq 'unknown') and ($type eq 'INS-BP2') and ($insbp_overlap == 0);
-            $annot2 .= ",SN-$seq_num";
-            push @{$INS_seq{$pos}}, "$chr:$pos $annot2 $ins_seq";
-            if (($annot2 =~ /unknown/) and (length $ins_seq >= $min_intersperse_dup)){
+            push @{$INS_seq{$pos}}, "$chr:$pos-$len $annot2 $ins_seq";
+            if ($annot2 =~ /unknown/){
                 $INS_undef{$pos} = "$chr:$pos $annot2 $ins_seq";
             }
         }
@@ -899,7 +925,6 @@ while (my $line = <FILE>){
         $inv_pair = scalar keys %inv_pair;
         $inv_rev_align = scalar keys %inv_rev_align;
         my ($dp, $inv_rate) = split (/,/, $dp_str);
-        next if ($inv_rate < $min_VRR);
         if ($dp > 0){
             if ($inv_pair / $dp >= 0.7){
                 $gt = 'HM';
@@ -934,14 +959,14 @@ while (my $line = <FILE>){
                 push @mTD, $item[5];
             }
         }
-        my ($dprate, $flank_dp, $dup_rate, $read_num) = split (/,/, $dp_str);
-        next if ($dup_rate < $min_VRR);
+        my ($dprate, $flank_dp, $dup_rate, $read_num, $bp5, $bp3, $ins_read, $insdup_len) = split (/,/, $dp_str);
+        $ins_read = 0 if (!defined $ins_read);
         next if ($dprate < 1) and ($len >= 500);
         if (@mTD > 0){
             my $sum = 0;
             map{$sum += $_} @mTD;
             $ave_mTD = int ($sum / @mTD + 0.5);
-            $ave_mTD += 2;
+            $ave_mTD += 3;
         }
         else{
             $ave_mTD = int ($dprate * 2 + 0.5);
@@ -958,6 +983,7 @@ while (my $line = <FILE>){
                 $gt = 'HM';
             }
         }
+
         my $dup_info = '';
         my $ref_seq = '';
         if (($mei_find == 1) and (@TE > 0) and ($len < 50000)){
@@ -988,14 +1014,19 @@ while (my $line = <FILE>){
                 $dup_info .= "MEI-$me_type,MEILEN-$overlaplen,MEICN-$cn,MEI2-$sec_me;" if ($sec_me ne '');
             }
         }
+        if ($ins_read > 0){
+            $dup_info .= "INSREAD-$ins_read;"
+        }
+        if ($insdup_len > 0){
+            $dup_info .= "INSLEN-$insdup_len;"
+        }
         $dup_info =~ s/;$// if ($dup_info =~ /;$/);
         print OUTD "$chr\t$pos\tDUP\t$len\tRN-$read_num;mTD-$ave_mTD;DPR-$dprate;VRR-$dup_rate;GT-$gt\n" if ($dup_info eq '');
         print OUTD "$chr\t$pos\tDUP\t$len\t$dup_info;RN-$read_num;mTD-$ave_mTD;DPR-$dprate;VRR-$dup_rate;GT-$gt\n" if ($dup_info ne '');
     }
     elsif ($type eq 'DEL'){
         my $read_num = $info;
-        my ($dp_rate, $flank_dp, $del_rate, $bp_read)  = split (/,/, $q0dprate);
-        next if ($del_rate < $min_VRR);
+        my ($dp_rate, $flank_dp, $del_rate, $bp_read)  = split (/,/, $dp2);
         if (($flank_dp > 0) and ($len < 500)){
             if ($read_num / $flank_dp >= 0.7){
                 $gt = 'HM';
@@ -1033,10 +1064,9 @@ while (my $line = <FILE>){
     }
     elsif ($type eq 'DEL-BP'){
         my ($rnum1, $rnum2) = split (/,/, $info);
-        my $dprate_dp = $q0dprate;
+        my $dprate_dp  = $dp2;
         my ($dprate, $flank_dp, $del_rate) = split (/,/, $dprate_dp);
         my $read_num = int (($rnum1 + $rnum2) * 0.5 + 0.5);
-        next if ($del_rate < $min_VRR);
         next if ($dprate > 0.9) and ($len >= 500);
         next if ($dprate > 0.85) and ($len >= 1000) and ($del_rate < 0.2);
         if ($flank_dp > 0){
@@ -1053,12 +1083,11 @@ while (my $line = <FILE>){
         elsif ($dprate >= 0.3){
             $gt = 'HT';
         }
-        print OUTD "$chr\t$pos\tDEL-BP\t$len\tRN1-$rnum1;RN2-$rnum2;INSLEN-$dp_str;DPR-$dprate;VRR-$del_rate;GT-$gt\n";
+        print OUTD "$chr\t$pos\tDEL-BP\t$len\tRN1-$rnum1;RN2-$rnum2;INSLEN-$dp_str;DPR-$dprate;VRR-$del_rate;GT-$gt;BP-$read_num\n";
     }
     elsif ($type eq 'REP'){
         my $read_num = $info;
-        my ($flank_dp, $rep_rate) = split (/,/, $q0dprate);
-        next if ($rep_rate < $min_VRR);
+        my ($flank_dp, $rep_rate) = split (/,/, $dp2);
         if ($flank_dp > 0){
             if ($read_num / $flank_dp >= 0.7){
                 $gt = 'HM';
@@ -1072,8 +1101,8 @@ while (my $line = <FILE>){
     elsif ($type eq 'REP-BP'){
         my ($rnum1, $rnum2) = split (/,/, $info);
         next if ($info eq '1,1');
-        my ($flank_dp, $rep_rate) = split (/,/, $q0dprate);
-        next if ($rep_rate < $min_VRR);
+        my ($flank_dp, $rep_rate) = split (/,/, $dp2);
+        my $pos2 = $pos + $len - 1;
         my $read_num = $rnum1 + $rnum2;
         next if ($read_num < $flank_dp * 0.1) and ($flank_dp > 0);
         if ($flank_dp > 0){
@@ -1087,16 +1116,20 @@ while (my $line = <FILE>){
         print OUTD "$chr\t$pos\tREP-BP\t$len\tRN1-$rnum1;RN2-$rnum2;VRR-$rep_rate;GT-$gt\n";
     }
     elsif ($type =~ /TR-/){
-        my ($read_cov, $unit_size, $ipos_str, $insbp, $dpr, $sec_str) = split (/=/, $dp_str);
+        my ($read_cov, $unit_size, $read_info, $insbp, $dpr, $sec_str) = split (/=/, $dp_str);
+        my @read_info = split (/\|/, $read_info);
+        my $read_info2 = $read_info[0];
+        my ($readid, $read_info3, $ipos) = split (/~/, $read_info2);
+#        my ($rpos, $ilen, $strand) = split (/-/, $read_info3);
         $dpr = 0 if (!defined $dpr);
-        $dpr = 1 if ($dpr eq '1r');
         my $strid = $STR{$pos};
         my ($spos, $send, $motif_size, $motif) = split (/=/, $STR2{$strid});
         my $slen = $send - $spos + 1;
-        my $ilen = $len;
+        my %mei;
         my $ins_mei = '';
         my $mei_len = 0;
         my $mei_cn = 0;
+        my $ilen = $len;
         $gt = 'HM';
         if ($info !~ /\//){
             my $rate = int ($info / $read_cov * 100 + 0.5) / 100;
@@ -1114,149 +1147,161 @@ while (my $line = <FILE>){
                 next;
             }
         }
-        if (($type =~ /TR-ins/) and (exists ${$ins_str_seq{$pos}}{$ins_num}) and ($ipos_str ne 'NA') and ($dpr < 1.2)){
-            my ($ins_cons, $seq_num, $ipos) = &get_consensus_STR ($chr, $pos, $ins_num);
-            my $annot = $strid;
-            my $hit_strid = '';
-            my $ins_cn = 0;
+        if (($type =~ /TR-ins/) and (exists ${$ins_str_seq{$pos}}{$ins_num}) and ($dpr < 1.2)){
             my $match_flag = 0;
-            if (length $ins_cons >= $min_ins_str_mei){
-                my ($me_type, $overlaplen, $cn) = &find_me ($ins_cons, $chr, $pos, $strid);
-                if ($overlaplen > 0){
-                    my $str_motif = $STR_motif{$strid};
-                    my $motif_size = length $str_motif;
-                    my $mei_match_flag = 0;
-                    if (($me_type eq 'ALU') and ($overlaplen >= 160) and ($motif_size <= 150)){
-                        $mei_match_flag = 1;
+            my $hit_strid = '';
+            my $ins_seq = '';
+            $ins_seq = ${$ins_str_seq{$pos}}{$ins_num};
+            my @ins_seq = split (/-/, $ins_seq);
+            my $annot = $strid;
+            my $ins_cn = 0;
+            foreach my $insseq (@ins_seq){
+                if (length $insseq >= $min_ins_str_mei){
+                    my $inslen = length $insseq;
+                    my ($me_type, $overlaplen, $cn) = &find_me ($insseq, $chr, $pos, $strid);
+                    if ($overlaplen > 0){
+                        my $str_motif = $STR_motif{$strid};
+                        my $motif_size = length $str_motif;
+                        if (($me_type eq 'ALU') and ($overlaplen >= 160) and ($motif_size <= 150)){
+                            $mei{$me_type} += $overlaplen;
+                        }
+                        elsif (($me_type eq 'SVA') and ($overlaplen >= 800)){
+                            $mei{$me_type} += $overlaplen;
+                        }
+                        elsif (($me_type eq 'LINE1') and ($overlaplen >= 800)){
+                            $mei{$me_type} += $overlaplen;
+                        }
+                        elsif (($me_type eq 'HERVK') and ($overlaplen >= 800)){
+                            $mei{$me_type} += $overlaplen;
+                        }
                     }
-                    elsif (($me_type eq 'SVA') and ($overlaplen >= 800)){
-                        $mei_match_flag = 1;
-                    }
-                    elsif (($me_type eq 'LINE1') and ($overlaplen >= 800)){
-                        $mei_match_flag = 1;
-                    }
-                    elsif (($me_type eq 'HERVK') and ($overlaplen >= 800)){
-                        $mei_match_flag = 1;
-                    }
-                    if ($mei_match_flag == 1){
-                        $ins_mei = $me_type;
-                        $mei_len = $overlaplen;
-                        $mei_cn = $cn;
-                        $ilen = $overlaplen;
-                    }            
                 }
             }
-            $ins_cons =~ s/-//g if ($ins_cons =~ /-/);
-            my $ins_len = length $ins_cons;
-            next if ($ins_len == 0);
-            if (($ins_mei eq '') and ($min_str_len_rate > 0)){
-                my $match_len1 = 0;
-                my $match_len2 = 0;
-                my $match_motif = $motif;
+            
+            if ((scalar keys %mei == 0) and ($min_str_len_rate > 0)){
                 my $alt_str_info = '';
-                if (($ins_len >= $motif_size) and ($motif_size <= 4)){
-                    ($match_len1) = &motif_test ($ins_cons, $motif);
-                }
-                elsif (($ins_len >= $motif_size * 2) and ($motif_size > 4)){
-                    ($match_len1, my $tmotif) = &TRF_test2 ($ins_cons, $motif, $chr);
-                    my $match_cov1 = int ($match_len1 / $ins_len * 100 + 0.5) / 100;
-                    if ($match_cov1 >= 0.6){
-                        my $motif_match_flag = 0;
-                        my $motifx2 = $motif . $motif;
-                        my $tmotifx2 = $tmotif . $tmotif;
-                        if ($motifx2 =~ /$tmotif/){
-                            $motif_match_flag = 1;
-                        }
-                        elsif ($tmotifx2 =~ /$motif/){
-                            $motif_match_flag = 1;
-                        }
-                        if ($motif_match_flag == 0){
-                            $match_len1 = 0;
-                            $match_cov1 = 0;
-                            my ($ident, $cov, $match) = &multalin_ins2 ($ins_cons, $motif, $chr);
-                            if (($ident >= $min_str_identity) and ($match >= $ins_len * $min_str_len_rate)){
-                                $match_len1 = $match;
+                my $sum_ins_len = 0;
+                my $sum_ins_match_len = 0;
+                my $sum_ins_match_len2 = 0;
+                my $sec_str_match_motif = '';
+                my %match_insseq;
+                my %match_insseq2;
+                foreach my $insseq (@ins_seq){
+                    my $ins_len = length $insseq;
+                    next if ($ins_len == 0);
+                    next if ($motif_size <= 5) and ($ins_len < $motif_size);
+                    $sum_ins_len += $ins_len;
+                    my $match_len = 0;
+                    if (($ins_len >= $motif_size) and ($motif_size <= 4)){
+                        ($match_len) = &motif_test ($insseq, $motif);
+                    }
+                    elsif (($ins_len >= $motif_size * 2) and ($motif_size > 4)){
+                        ($match_len, my $tmotif) = &TRF_test2 ($insseq, $motif, $chr);
+                        my $match_cov1 = int ($match_len / $ins_len * 100 + 0.5) / 100;
+                        if ($match_cov1 >= 0.6){
+                            my $motif_match_flag = 0;
+                            my $motifx2 = $motif . $motif;
+                            my $tmotifx2 = $tmotif . $tmotif;
+                            if ($motifx2 =~ /$tmotif/){
+                                $motif_match_flag = 1;
                             }
-=pod
-                            my $tmotif_size = length $tmotif;
-                            my ($ident, $cov, $match) = &multalin_ins1 ($ins_cons, $tmotif, $chr) if ($tmotif_size >= $ins_len);
-                            ($ident, $cov, $match) = &multalin_ins1 ($tmotif, $ins_cons, $chr) if ($tmotif_size < $ins_len);
-                            if (($ident < $min_str_identity) or ($cov < 80)){
-                                $match_len1 = 0;
+                            elsif ($tmotifx2 =~ /$motif/){
+                                $motif_match_flag = 1;
+                            }
+                            if ($motif_match_flag == 0){
+                                $match_len = 0;
                                 $match_cov1 = 0;
-                            }
-=cut
-                        }
-                    }
-                    elsif ($match_cov1 < 0.6){
-                        $match_len1 = 0;
-                        $match_cov1 = 0;
-                        my ($ident, $cov, $match) = &multalin_ins2 ($ins_cons, $motif, $chr);
-                        if (($ident >= $min_str_identity) and ($match >= $ins_len * $min_str_len_rate)){
-                            $match_len1 = $match;
-                        }
-                    }
-                }
-                else{
-                    my $motifR2 = $motif . $motif;
-                    if ($motif_size >= $ins_len){
-                        my ($ident, $cov, $match) = (0, 0, 0);
-                        if ($ins_len <= 5){
-                            if ($motifR2 =~ /$ins_cons/){
-                                $ident = 100;
-                                $cov = 100;
-                                $match = 5;
-                            }
-                            elsif (($min_str_identity <= 80) and ($ins_len == 5)){
-                                my $mflag = 0;
-                                for (my $i = 0; $i <= 4; $i++){
-                                    my $minsseq = $ins_cons;
-                                    substr ($minsseq, $i, 1, '[ACGT]');
-                                    if ($motifR2 =~ /$minsseq/){
-                                        $mflag = 1;
-                                        last;
-                                    }
-                                }
-                                if ($mflag == 1){
-                                    $ident = 80;
-                                    $cov = 80;
-                                    $match = 4;
-                                }
-                            }
-                            elsif (($min_str_identity <= 75) and ($ins_len == 4)){
-                                my $mflag = 0;
-                                for (my $i = 0; $i <= 3; $i++){
-                                    my $minsseq = $ins_cons;
-                                    substr ($minsseq, $i, 1, '[ACGT]');
-                                    if ($motifR2 =~ /$minsseq/){
-                                        $mflag = 1;
-                                        last;
-                                    }
-                                }
-                                if ($mflag == 1){
-                                    $ident = 75;
-                                    $cov = 75;
-                                    $match = 3;
+                                my $tmotif_size = length $tmotif;
+                                my ($ident, $cov, $match) = &multalin_ins2 ($insseq, $motif, $chr);
+#                               my ($ident, $cov, $match) = &multalin_ins1 ($insseq, $tmotif, $chr) if ($tmotif_size >= $ins_len);
+#                                ($ident, $cov, $match) = &multalin_ins1 ($tmotif, $insseq, $chr) if ($tmotif_size < $ins_len);
+#                                if (($ident < $min_str_identity) or ($cov < 80)){
+#                                    $match_len = 0;
+#                                    $match_cov1 = 0;
+#                                }
+                                if (($ident >= $min_str_identity) and ($match >= $ins_len * $min_str_len_rate)){
+                                    $match_len = $match;
                                 }
                             }
                         }
-                        else{
-                            ($ident, $cov, $match) = &multalin_ins1 ($ins_cons, $motifR2, $chr);
-                        }
-                        if (($ident >= $min_str_identity) and ($match >= $ins_len * $min_str_len_rate)){
-                            $match_len1 = $match;
+                        elsif ($match_cov1 < 0.6){
+                            $match_len = 0;
+                            $match_cov1 = 0;
+                            my ($ident, $cov, $match) = &multalin_ins2 ($insseq, $motif, $chr);
+                            if (($ident >= $min_str_identity) and ($match >= $ins_len * $min_str_len_rate)){
+                                $match_len = $match;
+                            }
                         }
                     }
                     else{
-                        my ($ident, $cov, $match) = &multalin_ins2 ($ins_cons, $motif, $chr) if ($motif_size * 2 <= $ins_len);
-                        ($ident, $cov, $match) = &multalin_ins1 ($ins_cons, $motifR2, $chr) if ($motif_size * 2 > $ins_len);
-                        if (($ident >= $min_str_identity) and ($match >= $ins_len * $min_str_len_rate)){
-                            $match_len1 = $match;
+                        my $motifR2 = $motif . $motif;
+                        if ($motif_size >= $ins_len){
+                            my ($ident, $cov, $match) = (0, 0, 0);
+                            if ($ins_len <= 5){
+                                if ($motifR2 =~ /$insseq/){
+                                    $ident = 100;
+                                    $cov = 100;
+                                    $match = 5;
+                                }
+                                elsif (($min_str_identity <= 80) and ($ins_len == 5)){
+                                    my $mflag = 0;
+                                    for (my $i = 0; $i <= 4; $i++){
+                                        my $minsseq = $insseq;
+                                        substr ($minsseq, $i, 1, '[ACGT]');
+                                        if ($motifR2 =~ /$minsseq/){
+                                            $mflag = 1;
+                                            last;
+                                        }
+                                    }
+                                    if ($mflag == 1){
+                                        $ident = 80;
+                                        $cov = 80;
+                                        $match = 4;
+                                    }
+                                }
+                                elsif (($min_str_identity <= 75) and ($ins_len == 4)){
+                                    my $mflag = 0;
+                                    for (my $i = 0; $i <= 3; $i++){
+                                        my $minsseq = $insseq;
+                                        substr ($minsseq, $i, 1, '[ACGT]');
+                                        if ($motifR2 =~ /$minsseq/){
+                                            $mflag = 1;
+                                            last;
+                                        }
+                                    }
+                                    if ($mflag == 1){
+                                        $ident = 75;
+                                        $cov = 75;
+                                        $match = 3;
+                                    }
+                                }
+                            }
+                            else{
+                                ($ident, $cov, $match) = &multalin_ins1 ($insseq, $motifR2, $chr);
+                            }
+                            if (($ident >= $min_str_identity) and ($match >= $ins_len * $min_str_len_rate)){
+                                $match_len = $match;
+                            }
+                        }
+                        else{
+                            my ($ident, $cov, $match) = &multalin_ins2 ($insseq, $motif, $chr) if ($motif_size * 2 <= $ins_len);
+                            ($ident, $cov, $match) = &multalin_ins1 ($insseq, $motifR2, $chr) if ($motif_size * 2 > $ins_len);
+                            if (($ident >= $min_str_identity) and ($match >= $ins_len * $min_str_len_rate)){
+                                $match_len = $match;
+                            }
                         }
                     }
+                    if ($match_len >= $ins_len * 0.5){
+                        $sum_ins_match_len += $match_len;
+                        $match_insseq{$insseq} = 1 if ($match_len > 0);
+                    }
+                    else{
+#                        $seg_align{$ins_count} = 0 if ($ins_len >= 50);
+                    }
                 }
-                my $match_cov1 = int ($match_len1 / $ins_len * 100 + 0.5) / 100;
+                my $match_cov1 = 0;
                 my $match_cov2 = 0;
+                $match_cov1 = int ($sum_ins_match_len / $sum_ins_len * 100 + 0.5) / 100 if ($sum_ins_len > 0);
                 if ($match_cov1 < 0.8){
                     if ($sec_str eq 'NA'){
                         my $ibin = int ($ipos / $Mbin_size);
@@ -1288,126 +1333,136 @@ while (my $line = <FILE>){
                         }
                     }
                     if ($sec_str ne 'NA'){
-                        my ($spos2, $send2, $motif_size2, $motif2) = split (/=/, $STR2{$sec_str});
-                        my $match_motif2 = $motif2;
-                        if (($ins_len >= $motif_size2) and ($motif_size2 <= 4)){
-                            ($match_len2) = &motif_test ($ins_cons, $motif2);
-                        }
-                        elsif (($ins_len >= $motif_size2 * 2) and ($motif_size2 > 4)){
-                            ($match_len2, my $tmotif2) = &TRF_test2 ($ins_cons, $motif2, $chr);
-                            my $match_cov2 = int ($match_len2 / $ins_len * 100 + 0.5) / 100;
-                            if ($match_cov2 >= 0.6){
-                                my $motif_match_flag = 0;
-                                my $motifx2 = $motif2 . $motif2;
-                                my $tmotifx2 = $tmotif2 . $tmotif2;
-                                if ($motifx2 =~ /$tmotif2/){
-                                    $motif_match_flag = 1;
+                        $sum_ins_len = 0;
+                        foreach my $insseq (@ins_seq){
+                            my $ins_len = length $insseq;
+                            next if ($ins_len == 0);
+                            my ($spos2, $send2, $motif_size2, $motif2) = split (/=/, $STR2{$sec_str});
+                            next if ($motif_size2 <= 5) and ($ins_len < $motif_size2);
+                            $sum_ins_len += $ins_len;
+                            my $match_len2 = 0;
+                            if (($ins_len >= $motif_size2) and ($motif_size2 <= 4)){
+                                ($match_len2) = &motif_test ($insseq, $motif2);
+                            }
+                            elsif (($ins_len >= $motif_size2 * 2) and ($motif_size2 > 4)){
+                                ($match_len2, my $tmotif2) = &TRF_test2 ($insseq, $motif2, $chr);
+                                my $match_cov2 = int ($match_len2 / $ins_len * 100 + 0.5) / 100;
+                                if ($match_cov2 >= 0.6){
+                                    my $motif_match_flag = 0;
+                                    my $motifx2 = $motif2 . $motif2;
+                                    my $tmotifx2 = $tmotif2 . $tmotif2;
+                                    if ($motifx2 =~ /$tmotif2/){
+                                        $motif_match_flag = 1;
+                                    }
+                                    elsif ($tmotifx2 =~ /$motif2/){
+                                        $motif_match_flag = 1;
+                                    }
+                                    if ($motif_match_flag == 0){
+                                        my $tmotif_size = length $tmotif2;
+                                        $match_len2 = 0;
+                                        $match_cov2 = 0;
+                                        my ($ident, $cov, $match) = &multalin_ins2 ($insseq, $motif2, $chr);
+                                        if (($ident >= $min_str_identity) and ($match >= $ins_len * $min_str_len_rate)){
+                                            $match_len2 = $match;
+                                        }
+#                                        my ($ident, $cov, $match) = &multalin_ins1 ($insseq, $tmotif2, $chr) if ($tmotif_size >= $ins_len);
+#                                        ($ident, $cov, $match) = &multalin_ins1 ($tmotif2, $insseq, $chr) if ($tmotif_size < $ins_len);
+#                                        if (($ident < $min_str_identity) or ($cov < 80)){
+#                                            $match_len2 = 0;
+#                                            $match_cov2 = 0;
+#                                        }
+                                    }
                                 }
-                                elsif ($tmotifx2 =~ /$motif2/){
-                                    $motif_match_flag = 1;
-                                }
-                                if ($motif_match_flag == 0){
+                                elsif ($match_cov2 < 0.6){
                                     $match_len2 = 0;
                                     $match_cov2 = 0;
-                                    my ($ident, $cov, $match) = &multalin_ins2 ($ins_cons, $motif2, $chr);
+                                    my ($ident, $cov, $match) = &multalin_ins2 ($insseq, $motif2, $chr);
                                     if (($ident >= $min_str_identity) and ($match >= $ins_len * $min_str_len_rate)){
                                         $match_len2 = $match;
                                     }
-=pod
-                                    my $tmotif_size = length $tmotif2;
-                                    my ($ident, $cov, $match) = &multalin_ins1 ($ins_cons, $tmotif2, $chr) if ($tmotif_size >= $ins_len);
-                                    ($ident, $cov, $match) = &multalin_ins1 ($tmotif2, $ins_cons, $chr) if ($tmotif_size < $ins_len);
-                                    if (($ident < $min_str_identity) or ($cov < 80)){
-                                        $match_len2 = 0;
-                                        $match_cov2 = 0;
-                                    }
-=cut
-                                }
-                            }
-                            elsif ($match_cov2 < 0.6){
-                                $match_len2 = 0;
-                                $match_cov2 = 0;
-                                my ($ident, $cov, $match) = &multalin_ins2 ($ins_cons, $motif2, $chr);
-                                if (($ident >= $min_str_identity) and ($match >= $ins_len * $min_str_len_rate)){
-                                    $match_len2 = $match;
-                                }
-                            }
-                        }
-                        else{
-                            my $motifR2 = $motif2 . $motif2;
-                            if ($motif_size2 >= $ins_len){
-                                my ($ident, $cov, $match) = (0, 0, 0);
-                                if ($ins_len <= 5){
-                                    if ($motifR2 =~ /$ins_cons/){
-                                        $ident = 100;
-                                        $cov = 100;
-                                        $match = 5;
-                                    }
-                                    elsif (($min_str_identity <= 80) and ($ins_len == 5)){
-                                        my $mflag = 0;
-                                        for (my $i = 0; $i <= 4; $i++){
-                                            my $minsseq = $ins_cons;
-                                            substr ($minsseq, $i, 1, '[ACGT]');
-                                            if ($motifR2 =~ /$minsseq/){
-                                                $mflag = 1;
-                                                last;
-                                            }
-                                        }
-                                        if ($mflag == 1){
-                                            $ident = 80;
-                                            $cov = 80;
-                                            $match = 4;
-                                        }
-                                    }
-                                    elsif (($min_str_identity <= 75) and ($ins_len == 4)){
-                                        my $mflag = 0;
-                                        for (my $i = 0; $i <= 3; $i++){
-                                            my $minsseq = $ins_cons;
-                                            substr ($minsseq, $i, 1, '[ACGT]');
-                                            if ($motif2 =~ /$minsseq/){
-                                                $mflag = 1;
-                                                last;
-                                            }
-                                        }
-                                        if ($mflag == 1){
-                                            $ident = 75;
-                                            $cov = 75;
-                                            $match = 3;
-                                        }
-                                    }
-                                }
-                                else{
-                                    ($ident, $cov, $match) = &multalin_ins1 ($ins_cons, $motifR2, $chr);
-                                }
-                                if (($ident >= $min_str_identity) and ($match >= $ins_len * $min_str_len_rate)){
-                                    $match_len2 = $match;
                                 }
                             }
                             else{
-                                my ($ident, $cov, $match) = &multalin_ins2 ($ins_cons, $motif2, $chr) if ($motif_size2 * 2 > $ins_len);
-                                ($ident, $cov, $match) = &multalin_ins1 ($ins_cons, $motifR2, $chr) if ($motif_size2 * 2 > $ins_len);
-                                if (($ident >= $min_str_identity) and ($match >= $ins_len * $min_str_len_rate)){
-                                    $match_len2 = $match;
+                                my $motifR2 = $motif2 . $motif2;
+                                if ($motif_size2 >= $ins_len){
+                                    my ($ident, $cov, $match) = (0, 0, 0);
+                                    if ($ins_len <= 5){
+                                        if ($motifR2 =~ /$insseq/){
+                                            $ident = 100;
+                                            $cov = 100;
+                                            $match = 5;
+                                        }
+                                        elsif (($min_str_identity <= 80) and ($ins_len == 5)){
+                                            my $mflag = 0;
+                                            for (my $i = 0; $i <= 4; $i++){
+                                                my $minsseq = $insseq;
+                                                substr ($minsseq, $i, 1, '[ACGT]');
+                                                if ($motifR2 =~ /$minsseq/){
+                                                    $mflag = 1;
+                                                    last;
+                                                }
+                                            }
+                                            if ($mflag == 1){
+                                                $ident = 80;
+                                                $cov = 80;
+                                                $match = 4;
+                                            }
+                                        }
+                                        elsif (($min_str_identity <= 75) and ($ins_len == 4)){
+                                            my $mflag = 0;
+                                            for (my $i = 0; $i <= 3; $i++){
+                                                my $minsseq = $insseq;
+                                                substr ($minsseq, $i, 1, '[ACGT]');
+                                                if ($motif2 =~ /$minsseq/){
+                                                    $mflag = 1;
+                                                    last;
+                                                }
+                                            }
+                                            if ($mflag == 1){
+                                                $ident = 75;
+                                                $cov = 75;
+                                                $match = 3;
+                                            }
+                                        }
+                                    }
+                                    else{
+                                        ($ident, $cov, $match) = &multalin_ins1 ($insseq, $motifR2, $chr);
+                                    }
+                                    if (($ident >= $min_str_identity) and ($match >= $ins_len * $min_str_len_rate)){
+                                        $match_len2 = $match;
+                                    }
+                                }
+                                else{
+                                    my ($ident, $cov, $match) = &multalin_ins2 ($insseq, $motif2, $chr) if ($motif_size2 * 2 > $ins_len);
+                                    ($ident, $cov, $match) = &multalin_ins1 ($insseq, $motifR2, $chr) if ($motif_size2 * 2 > $ins_len);
+                                    if (($ident >= $min_str_identity) and ($match >= $ins_len * $min_str_len_rate)){
+                                        $match_len2 = $match;
+                                    }
                                 }
                             }
+                            if ($match_len2 >= $ins_len * 0.5){
+                                $sum_ins_match_len2 += $match_len2;
+                                $match_insseq2{$insseq} = 1;
+                                $alt_str_info = "$sec_str:$motif2:$spos2" if ($alt_str_info eq '');
+                            }
+                            else{
+#                                $seg_align2{$ins_count2} = 0 if ($ins_len >= 50);
+                            }
                         }
-                        if ($match_len2 >= $ins_len * 0.5){
-                            $alt_str_info = "$sec_str:$motif2:$spos2";
-                            $match_cov2 = int ($match_len2 / $ins_len * 100 + 0.5) / 100;
-                        }
+                        $match_cov2 = int ($sum_ins_match_len2 / $sum_ins_len * 100 + 0.5) / 100 if ($sum_ins_len > 0);
                     }
                 }
-                my $match_mlen = length $match_motif;
                 if ($match_cov1 >= $match_cov2){
                     if ($match_cov1 >= $min_str_len_rate){
                         $match_flag = 1;
-                        $match_len1 = $len if ($match_len1 > $len);
+                        $sum_ins_match_len = $len if ($sum_ins_match_len > $len);
                         if (($motif_size == 1) and ($match_cov1 < 0.8)){
                             $match_flag = 0;
                         }
                         else{
                             $hit_strid = $strid;
-                            $ins_cn = int ($match_len1 / $motif_size * 10 + 0.5) / 10;
+                            $ins_cn = int ($sum_ins_match_len / $motif_size * 10 + 0.5) / 10;
+                            $ins_cn = int ($sum_ins_match_len / $motif_size * 100 + 0.5) / 100 if ($ins_cn == 0);
                             if ($ins_cn < $min_str_cn){
                                 $match_flag = 0;
                             }
@@ -1417,7 +1472,7 @@ while (my $line = <FILE>){
                 else{
                     if ($match_cov2 >= $min_str_len_rate){
                         $match_flag = 1;
-                        $match_len2 = $len if ($match_len2 > $len);
+                        $sum_ins_match_len2 = $len if ($sum_ins_match_len2 > $len);
                         my ($strid2, $motif2, $pos2) = split (/:/, $alt_str_info);
                         my $motif_size2 = length $motif2;
                         if (($motif_size2 == 1) and ($match_cov2 < 0.8)){
@@ -1425,20 +1480,47 @@ while (my $line = <FILE>){
                         }
                         else{
                             $hit_strid = $strid2;
-                            $ins_cn = int ($match_len2 / length ($motif2) * 10 + 0.5) / 10;
+                            $ins_cn = int ($sum_ins_match_len2 / length ($motif2) * 10 + 0.5) / 10;
+                            $ins_cn = int ($sum_ins_match_len2 / length ($motif2) * 100 + 0.5) / 100if ($ins_cn == 0);
                             if ($ins_cn < $min_str_cn){
                                 $match_flag = 0;
                             }
                         }
                     }
                 }
+                if ($match_flag == 0){
+                    $ins_seq =~ s/-//g if ($ins_seq =~ /-/);
+                }
+                else{
+                    $ins_seq = '';
+                    foreach my $insseq (@ins_seq){
+                        if ($match_cov1 >= $match_cov2){
+                            if (exists $match_insseq{$insseq}){
+                                $ins_seq .= $insseq;
+                            }
+                        }
+                        else{
+                            if (exists $match_insseq2{$insseq}){
+                                $ins_seq .= $insseq;
+                            }
+                        }
+                    }
+                }
             }
             else{
+                $ins_seq =~ s/-//g if ($ins_seq =~ /-/);
                 $match_flag = 2;
             }
-            if ($ins_mei ne ''){
-                $annot = "MEI($ins_mei),$strid";
-                push @{$INS_seq{$ipos}}, "$chr:$ipos-$ilen $annot $ins_cons";
+            if (scalar keys %mei > 0){
+                $ins_seq =~ s/-//g if ($ins_seq =~ /-/);
+                foreach my $mei (sort {$mei{$b} <=> $mei{$a}} keys %mei){
+                    $ins_mei = $mei;
+                    $mei_len = $mei{$mei};
+                    $mei_cn = int ($mei_len / $TE_len{$mei} * 10 + 0.5) / 10;
+                    last;
+                }
+                $annot = "MEI($ins_mei),$strid" if ($ins_mei ne '');
+                push @{$INS_seq{$ipos}}, "$chr:$ipos-$ilen $annot $ins_seq";
                 my $vrr = int ($info / $read_cov * 100 + 0.5) / 100;
                 my ($pos2, $end2) = split (/=/, $STR2{$strid});
                 if (($ipos >= $pos2 - 10) and ($ipos <= $end2 + 10)){
@@ -1455,7 +1537,8 @@ while (my $line = <FILE>){
                     my $match_flag2 = 0;
                     $match_flag2 = 1 if ($ipos >= $pos2 - 10) and ($ipos <= $end2 + 10);
                     my $vrr = int ($info / $read_cov * 100 + 0.5) / 100;
-                    my ($match_cn, $match_motif) = &TRF_test1 ($ins_cons, $chr);
+                    my $ins_len = length $ins_seq;
+                    my ($match_cn, $match_motif) = &TRF_test1 ($ins_seq, $chr);
                     $match_motif = '' if ($match_cn < 1.9);
                     if ($match_flag2 == 1){
                         $annot = "Weak-TR-homology,$strid";
@@ -1470,32 +1553,32 @@ while (my $line = <FILE>){
                         $str_line .= ";MOTIF-$match_motif:$match_cn" if ($match_motif ne '');
                     }
                     $str_line .= ";BP-$insbp" if (defined $insbp);
-                    push @{$INS_seq{$ipos}}, "$chr:$ipos-$ilen $annot $ins_cons";
+                    push @{$INS_seq{$ipos}}, "$chr:$ipos-$ilen $annot $ins_seq";
                 }
             }
             elsif ($match_flag == 2){
-                push @{$INS_seq{$pos}}, "$chr:$pos-$len $annot $ins_cons";
+                push @{$INS_seq{$pos}}, "$chr:$pos-$len $annot $ins_seq";
                 $str_line = "$chr\t$pos\t$type\t$len\tRN-$info;RD-$read_cov;GT-$gt;TR-$strid";
                 $str_line .= ";BP-$insbp" if (defined $insbp);
                 $hit_strID{$strid} = $str_line;
             }
-            elsif (($hit_strid ne $strid) and ($hit_strid ne '')){
+            elsif (($hit_strid ne '') and ($hit_strid ne $strid)){
                 my ($pos2, $end2) = split (/=/, $STR2{$hit_strid});
                 $annot = $hit_strid;
                 if (exists $ins_strID{$hit_strid}){
                     my $str_line2 = "$chr\t$pos2\tTR-ins\t$len\tRN-$info;RD-$read_cov;GT-$gt;TRCN-$ins_cn;TR-$hit_strid";
                     $str_line2 .= ";BP-$insbp" if (defined $insbp);
-                    my $ins_seq_info = "$chr:$pos2-$len $annot $ins_cons";
+                    my $ins_seq_info = "$chr:$pos2-$len $annot $ins_seq";
                     push @{$ins_strID_add{$hit_strid}}, "$str_line2==$pos2==$ins_seq_info";
                     next;
                 }
-                push @{$INS_seq{$pos2}}, "$chr:$pos2-$len $annot $ins_cons";
+                push @{$INS_seq{$pos2}}, "$chr:$pos2-$len $annot $ins_seq";
                 $str_line = "$chr\t$pos2\t$type\t$len\tRN-$info;RD-$read_cov;GT-$gt;TRCN-$ins_cn;TR-$hit_strid";
                 $str_line .= ";BP-$insbp" if (defined $insbp);
                 $hit_strID{$hit_strid} = $str_line;
             }
-            else{
-                push @{$INS_seq{$pos}}, "$chr:$pos-$len $annot $ins_cons";
+            elsif ($hit_strid ne ''){
+                push @{$INS_seq{$pos}}, "$chr:$pos-$len $annot $ins_seq";
                 $str_line = "$chr\t$pos\t$type\t$len\tRN-$info;RD-$read_cov;GT-$gt;TRCN-$ins_cn;TR-$hit_strid";
                 $str_line .= ";BP-$insbp" if (defined $insbp);
                 $hit_strID{$hit_strid} = $str_line;
@@ -1506,7 +1589,7 @@ while (my $line = <FILE>){
             $str_line .= ";BP-$insbp" if (defined $insbp);
             $str_line .= ";TRDUP-$dpr" if ($dpr >= 1.2);
         }
-        print OUTD "$str_line\n";
+        print OUTD "$str_line\n" if ($str_line ne '');
     }
 }
 close (FILE);
@@ -1514,7 +1597,6 @@ close (FILE);
 foreach my $sid (sort keys %ins_strID_add){
     my $count = 0;
     foreach (@{$ins_strID_add{$sid}}){
-        last if ($count == 3);
         my ($str_line, $pos2, $insseq_info) = split (/==/, $_);
         if (!exists $hit_strID{$sid}){
             $count ++;
@@ -1569,7 +1651,7 @@ if (scalar keys %INS_result > 0){
         }
         close (INS2);
         
-        my $minimap_command = "minimap2 -ax sr --MD -t1 -Y $ref_file $ins_undef_fasta > $temp_dir/Z.$chr.sam 2>$temp_dir/Z.$chr.minimap.log";
+        my $minimap_command = "minimap2 -ax sr -t1 -Y --MD $ref_file $ins_undef_fasta > $temp_dir/Z.$chr.sam 2>$temp_dir/Z.$chr.minimap.log";
         system ("$minimap_command");
         
         my %qalign;
@@ -1619,11 +1701,12 @@ if (scalar keys %INS_result > 0){
             my $mismatch = 0;
             while ($cigar =~ /(\d+)([MIX=])/g){
                 $maplen += $1;
+                $mismatch += $1 if ($2 eq 'I');
             }
             next if ($maplen < $min_dup_len);
             my $qlen = $qlen{$query};
             my $map_rate = int ($maplen / $qlen * 1000 + 0.5) / 10 if ($qlen > 0);
-            next if ($map_rate < $min_coverage * 0.9);
+            next if ($map_rate < $min_coverage);
             my $end2 = $pos2;
             while ($cigar =~ /(\d+)[MDX=]/g){
                 $end2 += $1;
@@ -1635,7 +1718,8 @@ if (scalar keys %INS_result > 0){
                 $mismatch += length $MD;
             }
             my $mismatch_rate = int ($mismatch / $qlen * 1000 + 0.5) / 10;
-            next if ($mismatch_rate > $max_mismatch);
+            next if ($mismatch_rate > $max_mismatch2);
+            next if ($mismatch_rate > $max_mismatch3) and ($qlen <= 150);
             $maplen -= $mismatch;
             if (!exists $qalign{$query}){
                 $qalign{$query} = "$chr2\t$pos2\t$tlen\t$maplen\t$strand\t$qlen";
@@ -1659,10 +1743,8 @@ if (scalar keys %INS_result > 0){
                     my $qcount = 0;
                     foreach (@{$INS_seq{$qpos}}){
                         my ($header, $annot, $seq) = split (/\s+/, $_);
-                        if ($annot =~ /unknown/){
-                            $annot =~ s/unknown/DUP/;
-                            ${$INS_seq{$qpos}}[$qcount] = "$header $annot $seq";
-                        }
+                        $annot =~ s/unknown/DUP/;
+                        ${$INS_seq{$qpos}}[$qcount] = "$header $annot $seq";
                         $qcount ++;
                     }
                 }
@@ -1681,10 +1763,8 @@ if (scalar keys %INS_result > 0){
                     my $qcount = 0;
                     foreach (@{$INS_seq{$qpos}}){
                         my ($header, $annot, $seq) = split (/\s+/, $_);
-                        if ($annot =~ /unknown/){
-                            $annot =~ s/unknown/intDUP/;
-                            ${$INS_seq{$qpos}}[$qcount] = "$header $annot $seq";
-                        }
+                        $annot =~ s/unknown/intDUP/ if ($annot =~ /unknown/);
+                        ${$INS_seq{$qpos}}[$qcount] = "$header $annot $seq"; 
                         $qcount ++;
                     }
                 }
@@ -1726,172 +1806,6 @@ undef %ins_bp_seq;
 undef %ins_str_seq;
 undef %seq;
 
-
-sub get_consensus{
-    my ($chr2, $pos) = @_;
-    my $ins_fasta = "$temp_dir/Z.$chr2.mINS.fa";
-    system ("rm $ins_fasta") if (-f $ins_fasta);
-    open (CINS, "> $ins_fasta");
-    my $count = 0;
-    my $max_seq = '';
-    foreach my $insseq (@{$ins_pos_seq{$pos}}){
-        $count ++;
-        my $qname = "query-$count";
-        print CINS ">$qname\n$insseq\n";
-        $max_seq = $insseq if (length $insseq > length $max_seq);
-    }
-    close (CINS);
-
-    my $ins_cons = '';
-    my $identity = 0;
-    if ($count == 1){
-        $ins_cons = $max_seq;
-    }
-    else{
-        ($ins_cons, $identity) = &multalin_cons ($ins_fasta, $count, $chr2, $pos) if (!-z $ins_fasta);
-        if (($count > 2) and (($ins_cons eq '') or ($identity < 70))){
-            $ins_cons = $max_seq;
-            $count = 1;
-        }
-        elsif (($count == 2) and ($identity < 60)){
-            $ins_cons = '';
-        }
-    }
-
-    return ($ins_cons, $count);
-}
-
-sub get_consensus_STR{
-    my ($chr2, $pos, $ins_num) = @_;
-    my $ins_fasta = "$temp_dir/Z.$chr2.mINS.fa";
-    system ("rm $ins_fasta") if (-f $ins_fasta);
-    open (CINS, "> $ins_fasta");
-    my $count = 0;
-    my $max_seq = '';
-    my @ipos;
-    foreach my $pos_insseq (@{${$ins_str_seq{$pos}}{$ins_num}}){
-        my ($ipos, $insseq) = split (/=/, $pos_insseq);
-        $count ++;
-        push @ipos, $ipos;
-        my $qname = "query-$count";
-        print CINS ">$qname\n$insseq\n";
-        $max_seq = $insseq if (length $insseq > length $max_seq);
-    }
-    close (CINS);
-
-    my $ins_cons = '';
-    if ($count == 1){
-        $ins_cons = $max_seq;
-    }
-    else{
-        ($ins_cons) = &multalin_cons ($ins_fasta, $count, $chr2, $pos) if (!-z $ins_fasta);
-        if ($ins_cons eq ''){
-            $ins_cons = $max_seq;
-            $count = 1;
-        }
-    }
-    @ipos = sort {$a <=> $b} @ipos;
-    my $hn = int (@ipos * 0.5);
-    my $med_ipos = $ipos[$hn];
-
-    return ($ins_cons, $count, $med_ipos);
-}
-
-sub multalin_cons{
-    my ($ins_fasta, $seq_count, $chr2, $pos) = @_;
-    my $ins_fasta_base = $1 if ($ins_fasta =~ /(.+)\.fa/);
-    my $multalin_out = "$ins_fasta_base.msf";
-    my $multalin_out1 = "$ins_fasta_base.clu";
-    my $multalin_out2 = "$ins_fasta_base.cl2";
-    system ("rm -f $multalin_out $multalin_out1 $multalin_out2");
-    system ("multalin -q $ins_fasta > $temp_dir/multalin.$chr2.log 2> $temp_dir/multalin.$chr2.log");
-    my $ins_cons = '';
-    if (!-f $multalin_out){
-        system ("mv $ins_fasta $temp_dir/$chr:$pos.mINS.fa");
-        return ($ins_cons, 0);
-    }
-    open (FILE1, $multalin_out);
-    while (my $line = <FILE1>){
-        chomp $line;
-        if ($line =~ /^\s+Consensus\s+(.+)/){
-            my $subseq = $1;
-            $subseq =~ s/\s+//g;
-            $ins_cons .= $subseq;
-        }
-    }
-    close (FILE1);
-    my $ident = 0;
-    my $match_base = 0;
-    my $unmatch = 0;
-    $match_base ++ while ($ins_cons =~ /[ACGT]/g);
-    $unmatch ++ while ($ins_cons =~ /\./g);
-    my $cons_len = length $ins_cons;
-    if ($seq_count == 2){
-        $ident = int ($match_base / ($cons_len - $unmatch) * 1000 + 0.5) / 10;
-    }
-    else{
-        $ident = int (($cons_len - $unmatch)  / $cons_len * 1000 + 0.5) / 10;
-    }
-    my $unmatch_rate = int ($unmatch / $cons_len * 10 + 0.5) / 10;
-    if (($seq_count >= 3) and ($ident >= 70) and ($unmatch_rate > 0.1)){
-        my $ins_cons2 = $ins_cons;
-        $ins_cons2 =~ s/\.//g;
-        $ins_cons2 = uc $ins_cons2;
-        ($ins_cons) = &multalin_cons2 ($ins_fasta, $ins_cons2, $chr2, $pos);
-    }
-    $ins_cons =~ s/\.//g;
-    $ins_cons = uc $ins_cons;
-    return ($ins_cons, $ident);
-}
-
-sub multalin_cons2{
-    my ($ins_fasta, $ins_cons2, $chr2, $pos) = @_;
-    my $ins_fasta_base = $1 if ($ins_fasta =~ /(.+)\.fa/);
-    my $multalin_out = "$ins_fasta_base.msf";
-    my $multalin_out1 = "$ins_fasta_base.clu";
-    my $multalin_out2 = "$ins_fasta_base.cl2";
-    system ("rm -f $multalin_out $multalin_out1 $multalin_out2");
-    my %query;
-    my %qlen;
-    my $qname = '';
-    open (FILE2, $ins_fasta) or die "$ins_fasta is not found: $!\n";
-    while (my $line2 = <FILE2>){
-        chomp $line2;
-        if ($line2 =~ /^>(\S+)/){
-            $qname = $1;
-        }
-        else{
-            $query{$qname} = $line2;
-            $qlen{$qname} = length $line2;
-        }
-    }
-    close (FILE2);
-    open (OUT2, "> $ins_fasta");
-    foreach my $query (sort {$qlen{$b} <=> $qlen{$a}} keys %qlen){
-        print OUT2 ">$query\n$query{$query}\n";
-        last;
-    }
-    print OUT2 ">ins-cons\n$ins_cons2\n";
-    close (OUT2);
-
-    system ("multalin -q $ins_fasta > $temp_dir/multalin.$chr2.log 2> $temp_dir/multalin.$chr2.log");
-    my $ins_cons = '';
-    if (!-f $multalin_out){
-        return ($ins_cons);
-    }
-    open (FILE1, $multalin_out);
-    while (my $line1 = <FILE1>){
-        chomp $line1;
-        if ($line1 =~ /^\s+Consensus\s+(.+)/){
-            my $subseq = $1;
-            $subseq =~ s/\s+//g;
-            $ins_cons .= $subseq;
-        }
-    }
-    close (FILE1);
-
-    return ($ins_cons);
-}
 
 sub find_overlap{
     my ($clip3t_seq, $clip5t_seq, $chr2, $pos) = @_;
@@ -1988,7 +1902,7 @@ sub find_dup_1{             # find tandem DUP with an ins-containing read
             $ref_seq = $subseq1 . $submid . $subseq2;
         }
     }
-    my ($dup_start, $dup_end, $direction) = &yass_align_dup ($ref_seq, $read_seq, $chr);
+    my ($dup_start, $dup_end, $direction) = &yass_align_dup ($ref_seq, $read_seq, $chr2);
     if ($dup_start > 0){
         $dup_start += $upos1;
         $dup_end += $upos1;
@@ -2009,7 +1923,7 @@ sub find_dup_2{             # find tandem DUP with an ins-containing read
     $upos1 = 1 if ($upos1 <= 0);
     $dpos2 = $pos if ($tag eq 'T5');
     $dpos2 = $pos + $ilen + 100 if ($tag eq 'T3');
-    $dpos2 = $chr_len{$chr2} if ($dpos2 > $chr_len{$chr2});
+    $dpos2 = $chr_len{$chr} if ($dpos2 > $chr_len{$chr2});
     my $ref_len = $dpos2 - $upos1 + 1;
     my $ref_seq = '';
     my $divnum1 = int ($upos1 / $Mbin_size);
@@ -2072,10 +1986,10 @@ sub find_me{
         my $me_len = $TE_len{$me};
         next if ($ilen < 150) and ($me_len >= 1000);
 #        next if ($ilen > $me_len * 3);
-        my ($overlap, $cn, $tcoverage, $qcoverage) = &yass_align_me ($me, $read_seq, $chr2, $pos);
+        my ($overlap, $cn, $te_cov, $query_cov) = &yass_align_me ($me, $read_seq, $chr, $pos);
         if ($overlap > 0){
-            $match{$me} = $qcoverage;
-            $match2{$me} = "$overlap=$cn=$qcoverage";
+            $match{$me} = $query_cov;
+            $match2{$me} = "$overlap=$cn=$query_cov";
             last if ($overlap / $ilen >= 0.9);
         }
     }
@@ -2093,7 +2007,7 @@ sub find_me{
             }
         }
         my ($overlaplen, $te_cn, $te_cov) = split (/=/, $match2{$te_type});
-        my ($overlaplen2, $te_cn2, $te_cov2) = split (/=/, $match2{$te_type2}) if ($te_type2 ne '');
+        my ($overlaplen2, $te_cn2, $te_dcov2) = split (/=/, $match2{$te_type2}) if ($te_type2 ne '');
         my $te_type2_len = "$te_type2-$overlaplen2" if ($te_type2 ne '');
         if (($ilen < 400) and ($te_type2 eq 'ALU') and ($overlaplen2 > 100)){
             $te_type2_len = "$te_type-$overlaplen";
@@ -2110,7 +2024,7 @@ sub find_me{
 }
 
 sub check_inv{             # check whether the reverse-complemented sequences of 5'- and 3'-clipped sequences of a double-clipped read are the downstream and upstream reference flanking sequences of the INV BPs, respectively
-    my ($chr2, $pos, $len) = @_;
+    my ($ref_info, $chr2, $pos, $len) = @_;
     my $select_id1 = '';
     my $select_id2 = '';
 
@@ -2185,8 +2099,8 @@ sub check_inv{             # check whether the reverse-complemented sequences of
         $clipseq2 =~ tr/ACGT/TGCA/;
         my $match_tag1 = 0;
         my $match_tag2 = 0;
-        ($match_tag1) = &yass_align_inv ($ref_seq1, $clipseq1, $chr2) if ($clipseq1 ne '');
-        ($match_tag2) = &yass_align_inv ($ref_seq2, $clipseq2, $chr2) if ($clipseq2 ne '');
+        ($match_tag1) = &yass_align_inv ($ref_seq1, $clipseq1, $chr) if ($clipseq1 ne '');
+        ($match_tag2) = &yass_align_inv ($ref_seq2, $clipseq2, $chr) if ($clipseq2 ne '');
         if (($match_tag1 == 1) and ($match_tag2 == 1)){
             $match_flag = 1;
             last;
@@ -2206,8 +2120,7 @@ sub yass_align_dup{
     open (NEWFILE1, "> $temp_dir/Z.$chr2-seq2.fa");
     print NEWFILE1 '>seq2', "\n", $seq2;
     close (NEWFILE1);
-    my $gap_penalty = '-8,-1';
-    my @result = `yass -O 20 -m $max_mismatch -i $indel_rate -G $gap_penalty $temp_dir/Z.$chr2-seq1.fa $temp_dir/Z.$chr2-seq2.fa 2>/dev/null`;
+    my @result = `yass -O 10 -m $max_mismatch $temp_dir/Z.$chr2-seq1.fa $temp_dir/Z.$chr2-seq2.fa 2>/dev/null`;
     my $seq2_len = length $seq2;
     my $overlap_len = 0;
     my $match_pos1 = 0;
@@ -2295,8 +2208,8 @@ sub yass_align_dup{
 }
 
 sub yass_align_me{
-    my ($me, $insseq, $chr2) = @_;
-    if (!-f "$temp_dir/Z.$chr2.$me.fa"){
+    my ($me, $insseq, $chr2, $pos) = @_;
+    if (!-f "$temp_dir/chr$chr.$me.fa"){
         my $me_seq = $TE{$me};
         open (NEWFILE1, "> $temp_dir/Z.$chr2.$me.fa");
         print NEWFILE1 ">$me\n$me_seq\n";
@@ -2305,8 +2218,7 @@ sub yass_align_me{
     open (NEWFILE1, "> $temp_dir/Z.$chr2-seq.fa");
     print NEWFILE1 ">seq\n$insseq\n";
     close (NEWFILE1);
-    my $gap_penalty = '-8,-1';
-    my @result = `yass -O 20 -m $max_mismatch -i $indel_rate -G $gap_penalty $temp_dir/Z.$chr2.$me.fa $temp_dir/Z.$chr2-seq.fa 2>/dev/null`;
+    my @result = `yass -O 10 -m $max_mismatch $temp_dir/Z.$chr2.$me.fa $temp_dir/Z.$chr2-seq.fa 2>/dev/null`;
     my $me_len = $TE_len{$me};
     my $ins_len = length $insseq;
     my $overlap_tlen = 0;
@@ -2449,8 +2361,7 @@ sub yass_align_overlap{
     open (NEWFILE1, "> $temp_dir/Z.$chr2-seq2.fa");
     print NEWFILE1 '>seq2', "\n", $seq2;
     close (NEWFILE1);
-    my $gap_penalty = '-8,-1';
-    my @result = `yass -O 20 -m $max_mismatch -i $indel_rate -G $gap_penalty -r 0 $temp_dir/Z.$chr2-seq1.fa $temp_dir/Z.$chr2-seq2.fa 2>/dev/null`;
+    my @result = `yass -O 10 -m $max_mismatch -r 0 $temp_dir/Z.$chr2-seq1.fa $temp_dir/Z.$chr2-seq2.fa 2>/dev/null`;
     my $tlen = length $seq1;
     my $qlen = length $seq2;
     my $overlap_len = 0;
@@ -2518,8 +2429,7 @@ sub yass_align_inv{
     open (NEWFILE1, "> $temp_dir/Z.$chr2-seq2.fa");
     print NEWFILE1 '>seq2', "\n", $seq2;
     close (NEWFILE1);
-    my $gap_penalty = '-8,-1';
-    my @result = `yass -O 20 -m $max_mismatch -i $indel_rate -G $gap_penalty -r 0 $temp_dir/Z.$chr2-seq1.fa $temp_dir/Z.$chr2-seq2.fa 2>/dev/null`;
+    my @result = `yass -O 10 -m $max_mismatch -r 0 $temp_dir/Z.$chr2-seq1.fa $temp_dir/Z.$chr2-seq2.fa 2>/dev/null`;
     my $seq1_len = length $seq1;
     my $seq2_len = length $seq2;
     my $overlap_len = 0;
@@ -2532,7 +2442,6 @@ sub yass_align_inv{
     my $mismatch_count = 0;
     foreach my $line (@result){
         chomp $line;
-#print STDERR "$line\n";# if ($pos == 64637275) or ($pos == 68357399); 
         if (($line =~ /\*\((\d+)-(\d+)\)\((\d+)-(\d+)\)/) and ($match_flag == 0)){
             $match_flag = 1;
             if ($1 < $2){
@@ -2594,15 +2503,62 @@ sub yass_align_inv{
         my $mmrate = int ($mismatch_count / $overlap_len * 1000 + 0.5) / 10;
         my $coverage = int ($overlap_len / $seq2_len * 1000 + 0.5) / 10;
         if (($mmrate <= $max_mismatch2) and ($coverage >= 0.7)){
-            return (1);
+            return (1, $overlap_len);
         }
         else{
-            return (0);
+            return (0, 0);
         }
     }
     else{
-        return (0);
+        return (0, 0);
     }
+}
+
+sub yass_realign{
+    my ($seq1, $seq2, $chr2) = @_;
+    open (NEWFILE1, "> $temp_dir/Z.$chr2-seq1.fa");
+    print NEWFILE1 '>seq1', "\n", $seq1;
+    close (NEWFILE1);
+                
+    open (NEWFILE1, "> $temp_dir/Z.$chr2-seq2.fa");
+    print NEWFILE1 '>seq2', "\n", $seq2;
+    close (NEWFILE1);
+    my $indel_rate2 = 15;
+    my @result = `yass -O 10 -m $max_mismatch -i $indel_rate2 -r 0 $temp_dir/Z.$chr2-seq1.fa $temp_dir/Z.$chr2-seq2.fa 2>/dev/null`;
+    my $seq1_len = length $seq1;
+    my $seq2_len = length $seq2;
+    my $overlap_len = 0;
+    my $merge_seq = '';
+    my $match = 0;
+    my $indel_count = 0;
+    foreach my $line (@result){
+        chomp $line;
+        if (($line =~ /\*\((\d+)-(\d+)\)\((\d+)-(\d+)\)/) and ($match == 0)){
+            my $match_len1 = $2 - $1 + 1;
+            my $match_len2 = $4 - $3 + 1;
+            $overlap_len = $match_len1;
+            $overlap_len = $match_len2 if ($match_len1 < $match_len2);
+            if (($overlap_len >= $seq1_len * 0.8) or (($2 >= $seq1_len - 50) and ($1 <= 50))){
+                $match = 1;
+            }
+            else{
+                next;
+            }
+        }
+        elsif (($match == 1) and ($line =~ /^[ACGTN\-]+$/)){
+            $indel_count ++ while ($line =~ /-/g);
+        }
+        elsif (($line =~ /\*\((\d+)-(\d+)\)\((\d+)-(\d+)\)/) and ($match == 1)){
+            last;
+        }
+    }
+    if ($match == 1){
+        my $indelrate = int ($indel_count / $overlap_len * 1000 + 0.5) / 10;
+        if ($indelrate > $indel_rate2){
+            $match = 0;
+        }
+    }
+    return ($match);
 }
 
 sub yass_realign2{
@@ -2847,6 +2803,7 @@ sub multalin_ins1{
     my $multalin_out = "$input_base.msf";
     my $multalin_out1 = "$input_base.clu";
     my $multalin_out2 = "$input_base.cl2";
+    my $multalin_log = "$input_base.log";
     my @ins_seq;
     push @ins_seq, $ins_seq;
     my $match_len = 0;
@@ -2860,7 +2817,7 @@ sub multalin_ins1{
     print OUT1 ">INS\n";
     print OUT1 "$ins_seq\n";
     close (OUT1);
-    system ("multalin -q $input_fasta > $temp_dir/Z.multalin.log");
+    system ("multalin -q $input_fasta > $multalin_log");
     
     if (!-f $multalin_out){
         return (0, 0, 0);
@@ -2933,7 +2890,7 @@ sub multalin_ins1{
         $match_len2 += $match;
         $mismatch_len2 += $mismatch;
     }
-    system ("rm -f $input_fasta $multalin_out $multalin_out1 $multalin_out2");
+    system ("rm -f $input_fasta $multalin_out $multalin_out1 $multalin_out2 $multalin_log");
     my $coverage = int ($cov_len / $ins_len * 1000 + 0.5) / 10;
 
     return ($match_rate, $coverage, $cov_len);
