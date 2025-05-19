@@ -3009,6 +3009,7 @@ foreach my $chr (sort keys %sv2){
     foreach my $pos (sort {$a <=> $b} keys %{$sv2{$chr}}){
         foreach my $type (keys %{${$sv2{$chr}}{$pos}}){
             my $svline = ${${$sv2{$chr}}{$pos}}{$type};
+            $svline =~ s/^0// if ($svline =~ /^0/) and ($non_human == 0);
             print OUT "$svline\n";
             $svtype{$type} ++;
             if ($type eq 'TR'){
