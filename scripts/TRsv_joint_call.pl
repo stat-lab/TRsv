@@ -220,6 +220,7 @@ my %ins_bp;
 my %ins_bp_line;
 my $count = 0;
 my @header;
+my $total_str2 = 0;
 
 foreach my $id (@sample_id){
     my $var_file = $sample_id{$id};
@@ -387,6 +388,7 @@ foreach my $id (@sample_id){
 					$line[7] =~ s/CN=gain\+[\d\.]+;/CN=gain+$cn1,loss-$cn2;/;
 				}
 			}
+			$line[4] = '<TR:CNV>';
 			$line = join ("\t", @line);
 			${${$cnv_line{$chr}}{$pos}}{$id} = $line;
 			$cnv_info{$strid} = "$chr=$pos=$strend=$strulen";
@@ -2421,6 +2423,11 @@ foreach my $chr (sort keys %vcf_cons){		# divide multi-allelic INSs
 
 my %vcf_cons2;
 my %vcf_type2;
+my %ins_str;
+my $ins2str = 0;
+my $str2ins = 0;
+my $delete_str = 0;
+my $delete_ins = 0;
 
 foreach my $chr (sort keys %vcf_cons){
 	my $chr2 = $chr;
@@ -2854,11 +2861,17 @@ foreach my $chr (sort keys %vcf_cons){
 									}
 								}
 							}
+							$ins2str ++;
 						}
+						$delete_ins ++;
+#print STDERR "$chr:$pos INS-$len was incorporated into STR-CNV ($top_strid): $schr:$spos ($match >= $sc)\n";
 						next;
 					}
 					elsif ($strid_count / $sc >= 0.5){		# STR-INS is merged to INS with no STR copies
 						$new_line .= ";TRID=$top_strid";
+#						if (($top_strid =~ /^TR/) and ($type eq 'INS')){
+#							${$ins_str{$top_strid}}{"$chr=$pos=$med_len"} = $ac;
+#						}
 						if ($strid_count >= $match){
 							$format_info = '';
 							foreach my $id (sort keys %Gid){
@@ -2868,12 +2881,14 @@ foreach my $chr (sort keys %vcf_cons){
 								elsif (exists $match{$id}){
 									my ($slen, $svrr, $sread, $sgt) = split (/=/, $match{$id});
 									$format_info .= "$sgt:$pos:$slen:$sread:$svrr:0:1:0\t";
+									$str2ins ++;
 								}
 								else{
 									$format_info .= "0/0:0:0:0:0:0:0:0\t";
 								}
 							}
 							$format_info =~ s/\t$//;
+#print STDERR "$top_strid ($schr:$spos) INS was incorporated into $chr:$pos INS-$len ($match < $sc $strid_count)\n";
 							foreach my $id (keys %{${$cnv_line{$schr}}{$spos}}){
 								next if (!exists $match{$id});
 								my $cnv_line = ${${$cnv_line{$schr}}{$spos}}{$id};
@@ -2934,6 +2949,8 @@ foreach my $chr (sort keys %vcf_cons){
 								if (scalar keys %{${$cnv_line{$schr}}{$spos}} == 0){
 									delete ${$cnv_line{$schr}}{$spos};
 									delete $cnv_info{$top_strid};
+									$delete_str ++;
+print STDERR "$top_strid: $schr:$spos: was deleted\n";
 								}
 							}
 						}
@@ -2942,6 +2959,9 @@ foreach my $chr (sort keys %vcf_cons){
 				else{
 					if ($strid_count / $sc >= 0.5){
 						$new_line .= ";TRID=$top_strid";
+#						if (($top_strid =~ /^TR/) and ($type eq 'INS')){
+#							${$ins_str{$top_strid}}{"$chr=$pos=$med_len"} = $ac;
+#						}
 					}
 				}
 			}
@@ -2963,6 +2983,12 @@ foreach my $chr (sort keys %vcf_cons){
 	}
 }
 %vcf_cons = ();
+
+print STDERR "INS to STR converted: $ins2str\n";
+print STDERR "STR to INS converted: $str2ins\n";
+print STDERR "Deleted INS: $delete_ins\n";
+print STDERR "Deleted STR-INS: $delete_str\n";
+
 
 foreach my $type (keys %vcf_type2){			# merge or rearrange alleles of proximal sites depending on their lengths
 	foreach my $chr (keys %{$vcf_type2{$type}}){
@@ -3508,6 +3534,9 @@ foreach my $chr (keys %ins_bp_cons2){
 	}
 }
 
+my $delete_str2 = 0;
+my $delete_str3 = 0;
+my $delete_ins2 = 0;
 foreach my $chr (keys %cnv_line){
 	my $chr02d = $chr;
 	$chr02d = sprintf ("%02d", $chr) if ($chr =~ /^\d+$/);
@@ -3670,7 +3699,10 @@ foreach my $chr (keys %cnv_line){
 				$del_range = $dellen[0] if ($dellen[0] == $dellen[-1]);
 			}
 			else{
-				next if ($ins_ac == 0);
+				if ($ins_ac == 0){
+					$delete_str3 ++;
+					next;
+				}
 				@inslen = sort {$a <=> $b} @inslen;
 				$ins_range = "$inslen[0]-$inslen[-1]";
 				$ins_range = $inslen[0] if ($inslen[0] == $inslen[-1]);
@@ -3678,6 +3710,107 @@ foreach my $chr (keys %cnv_line){
 				$min_inslen = $inslen[0];
 			}
 		}
+=pod
+		if (exists $ins_str{$strid}){					# merge TR-INS and INS within the same strid when meeting the criteria
+			foreach my $pos_info (sort {${$ins_str{$strid}}{$a} <=> ${$ins_str{$strid}}{$b}} keys %{$ins_str{$strid}}){
+				my $ac2 = ${$ins_str{$strid}}{$pos_info};
+				my ($chr2, $pos2, $ilen2) = split (/=/, $pos_info);
+				if (($ins_ac >= $ac2 * 2) and ($max_inslen >= $ilen2)){
+					if (exists ${${$vcf_cons2{$chr2}}{$pos2}}{'INS'}){
+						my $iline = ${${$vcf_cons2{$chr2}}{$pos2}}{'INS'};
+						my @iline = split (/\t/, $iline);
+						my $count = 0;
+						foreach (@iline){
+							$count ++;
+							next if ($count <= 9);
+							next if ($_ =~ /^0\/0/);
+							my $ID = $Gid_order{$count};
+							my ($igt, $ipos, $ilen, $iread, $ivrr, $ibp, $idpr) = split (/:/, $_);
+							my $icn = int ($ilen / $strulen * 0.5 * 10 + 0.5) / 10;
+							if (!exists $gt{$ID}){
+								$len{$ID} = $ilen;
+								$gt{$ID} = $igt ;
+								$read{$ID} = $iread;
+								$vrr{$ID} = $ivrr;
+								$bp{$ID} = $ibp;
+								$cn{$ID} = $icn;
+							}
+						}
+						delete ${${$vcf_cons2{$chr2}}{$pos2}}{'INS'};
+						$delete_ins2 ++;
+					}
+				}
+				elsif (($ins_ac > 0) and ($ins_ac * 4 < $ac2)){
+					if (($ilen2 * 0.7 >= $min_inslen) and ($ilen2 * 1.4 <= $max_inslen)){
+						if (exists ${${$vcf_cons2{$chr2}}{$pos2}}{'INS'}){
+							my $iline = ${${$vcf_cons2{$chr2}}{$pos2}}{'INS'};
+							my @iline = split (/\t/, $iline);
+							my $count = 0;
+							my $merge_flag = 0;
+							foreach (@iline){
+								$count ++;
+								next if ($count <= 9);
+								next if ($_ !~ /^0\/0/);
+								my $ID = $Gid_order{$count};
+								next if (!exists $gt{$ID}) or (!exists $read{$ID});
+								my $str_len = $len{$ID};
+								my $flag = 0;
+								if ($str_len =~ /,/){
+									my ($str_len1, $str_len2) = split (/,/, $str_len);
+									$str_len = 0;
+									if ($str_len1 > 0){
+										if (($str_len1 / $ilen2 >= 0.5) and ($str_len1 / $ilen2 <= 2)){
+											$str_len = $str_len1;
+											$flag = 1;
+										}
+									}
+									if (($str_len == 0) and ($str_len2 > 0)){
+										if (($str_len2 / $ilen2 >= 0.5) and ($str_len2 / $ilen2 <= 2)){
+											$str_len = $str_len2;
+											$flag = 2;
+										}
+									}
+								}
+								else{
+									if ($str_len > 0){
+										if (($str_len / $ilen2 >= 0.5) and ($str_len / $ilen2 <= 2)){
+											$flag = 1;
+										}
+									}
+								}
+								next if ($flag == 0);
+								$merge_flag = 1;
+								my $ilen = $str_len;
+								my $igt = $gt{$ID};
+								$igt = '0/1' if ($igt eq '2/2');
+								my $iread = $read{$ID};
+								if ($iread =~ /,/){
+									my @iread = split (/,/, $iread);
+									$iread = $iread[$flag - 1];
+								}
+								my $ivrr = $vrr{$ID};
+								if ($ivrr =~ /,/){
+									my @ivrr = split (/,/, $ivrr);
+									$ivrr = $ivrr[$flag - 1];
+								}
+								my $ibp = $bp{$ID};
+								my $ipos = $pos;
+								my $dpr = 1;
+								my $info = "$igt:$ipos:$ilen:$iread:$ivrr:$ibp:$dpr:0";
+								$iline[$count - 1] = $info;
+							}
+							if ($merge_flag == 1){
+								my $new_iline = join ("\t", @iline);
+								${${$vcf_cons2{$chr2}}{$pos2}}{'INS'} = $new_iline;
+								$delete_str2 ++;
+								next;
+							}
+						}
+					}
+				}
+			}
+		}
+=cut
 		my $ave_sar = 0;
 		if (@sar > 0){
 			my $sum_sar = 0;
@@ -3717,8 +3850,14 @@ foreach my $chr (keys %cnv_line){
 		$new_line .= ";SAR=$ave_sar" if (@sar > 0);
 		$new_line .= ";TRID=$strid;TREND=$strend;TRULEN=$strulen\t$format\t$format_info";
 		${${$vcf_cons2{$chr02d}}{$pos}}{'CNV'} = $new_line;
+		$total_str2 ++;
 	}
 }
+
+print STDERR "Deleted INS2: $delete_ins2\n";
+print STDERR "Deleted STR-INS2: $delete_str2 ($delete_str3)\n";
+print STDERR "Initial STR-CNV: ", scalar keys %cnv_info, "\n";
+print STDERR "Final STR-CNV: $total_str2\n";
 
 print STDERR "4th step completed:\n";
 
@@ -3809,7 +3948,7 @@ print OUT "##FORMAT=<ID=VR,Number=.,Type=Float,Description=\"Ratio of TR-CNV/SV-
 print OUT "##FORMAT=<ID=CN,Number=.,Type=Float,Description=\"Copy number of CNV (increased or decreased number of a repeat unit) in TR for a sample (TR-CNV only)\">\n";
 print OUT "##FORMAT=<ID=BP,Number=1,Type=Float,Description=\"Number of break ends (soft-clipped read ends) supporting TR-CNV/SV for a sample\">\n";
 print OUT "##FORMAT=<ID=DR,Number=1,Type=Float,Description=\"Ratio of read depth in DEL/DUP region to that to the flanking regions for a sample (only non-TR-CNV)\">\n";
-print OUT "##FORMAT=<ID=TR,Number=1,Type=String,Description=\"Taandem repeat (unit length-copy number) observed in non-TR INS sequence\">\n";
+print OUT "##FORMAT=<ID=TR,Number=1,Type=String,Description=\"Tandem repeat (unit length-copy number) observed in non-TR INS sequence\">\n";
 
 foreach my $chr (@ref){
 	print OUT "##contig=<ID=$chr,length=$ref_len{$chr}>\n";
