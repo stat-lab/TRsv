@@ -4004,6 +4004,7 @@ foreach my $chr (sort keys %vcf_cons2){
             	}
             }
 		    $line[7] .= ";AF=$af;AC=$ac;SC=$sc";
+		    $line[2] =~ s/^0// if ($line[0] =~ /^0/) and ($non_human == 1);
             my $line = join ("\t", @line);
             print OUT $line, "\n";
         }
