@@ -4013,6 +4013,19 @@ foreach my $chr (sort keys %vcf_cons2){
 		    		$line[7] =~ s/END=\d+/END=$end2/;
 		    	}
 		    }
+		    if ($line[4] eq '<INS:BP>'){
+		    	my $count = 0;
+		    	foreach (@line){
+		    		$count ++;
+		    		next if ($count <= 9);
+		    		next if ($_ =~ /^0\/0/);
+		    		my @info = split (/:/, $_);
+		    		if ($info[2] != 0){
+		    			$info[2] = 0;
+		    			$line[$count - 1] = join (':', @info);
+		    		}
+		    	}
+		    }
             my $line = join ("\t", @line);
             print OUT $line, "\n";
         }
