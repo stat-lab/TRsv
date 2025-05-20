@@ -4005,6 +4005,14 @@ foreach my $chr (sort keys %vcf_cons2){
             }
 		    $line[7] .= ";AF=$af;AC=$ac;SC=$sc";
 		    $line[2] =~ s/^0// if ($line[0] =~ /^0/) and ($non_human == 1);
+		    if ($type eq 'DEL'){
+		    	my $len = $1 if ($line[7] =~ /SVLEN=-*(\d+)/);
+		    	my $end = $1 if ($line[7] =~ /END=(\d+)/);
+		    	my $end2 = $pos + $len - 1;
+		    	if ($end != $end2){
+		    		$line[7] =~ s/END=\d+/END=$end2/;
+		    	}
+		    }
             my $line = join ("\t", @line);
             print OUT $line, "\n";
         }
