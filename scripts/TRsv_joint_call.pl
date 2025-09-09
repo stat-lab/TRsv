@@ -51,7 +51,7 @@ GetOptions(
     'gender|g=s' => \$gender_list,
     'gap_bed|gap=s' => \$gap_bed,
     'non_human|nh=i' => \$non_human,
-    'build|b=i' => \$build,
+    'build|b=s' => \$build,
     'ref|r=s' => \$ref_index,
     'lqs_list|lqs=s' => \$lowQ_sample_list,
     'min_len|ml=i' => \$min_sv_len,
