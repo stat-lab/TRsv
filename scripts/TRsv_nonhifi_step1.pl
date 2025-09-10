@@ -244,22 +244,24 @@ while (my $line = <FILE>){
 }
 close (FILE);
 
-open (FILE, "gzip -dc $gap_bed |") or die "$gap_bed is not found:$!\n" if ($gap_bed =~ /\.gz$/);
-open (FILE, $gap_bed) or die "$gap_bed is not found:$!\n" if ($gap_bed !~ /\.gz$/);
-while (my $line = <FILE>){
-    chomp $line;
-    my @line = split (/\s+/, $line);
-    my $chr = $line[0];
-    my $pos = $line[1];
-    my $end = $line[2];
-    for (my $i = $pos - 15; $i <= $pos + 5; $i++){
-        ${$gap_bp{$chr}}{$i} = 1;
+if (($gap_bed ne '') and (-f $gap_bed)){
+    open (FILE, "gzip -dc $gap_bed |") or die "$gap_bed is not found:$!\n" if ($gap_bed =~ /\.gz$/);
+    open (FILE, $gap_bed) or die "$gap_bed is not found:$!\n" if ($gap_bed !~ /\.gz$/);
+    while (my $line = <FILE>){
+        chomp $line;
+        my @line = split (/\s+/, $line);
+        my $chr = $line[0];
+        my $pos = $line[1];
+        my $end = $line[2];
+        for (my $i = $pos - 15; $i <= $pos + 5; $i++){
+            ${$gap_bp{$chr}}{$i} = 1;
+        }
+        for (my $i = $end - 5; $i <= $end + 15; $i++){
+            ${$gap_bp{$chr}}{$i} = 1;
+        }
     }
-    for (my $i = $end - 5; $i <= $end + 15; $i++){
-        ${$gap_bp{$chr}}{$i} = 1;
-    }
+    close (FILE);
 }
-close (FILE);
 
 if (-f $exclude_bed){
     open (FILE, $exclude_bed) or die "$exclude_bed is not found: $!\n" if ($exclude_bed !~ /\.gz$/);
