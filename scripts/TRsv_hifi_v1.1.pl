@@ -434,6 +434,7 @@ system ("rm -f $temp_dir/multalin_test.msf") if (-f "$temp_dir/multalin_test.msf
 @yass_result = `yass -O 20 -m 10 -i 10 $tool_test_dir/test1.fasta $tool_test_dir/test2.fasta 2>/dev/null`;
 @trf_result = `trf $tool_test_dir/test1.fasta 2 7 7 80 10 50 2000 -d -l 1 -h -ngs`;
 system ("cp -f $tool_test_dir/multalin_test.fasta $temp_dir/");
+system ("cp -f $data_dir/blosum62.tab ./");
 my @multalin_result = `multalin -q $temp_dir/multalin_test.fasta`;
 if (@yass_result < 20){
     die "yass seems not to be properly installed:\n";
@@ -442,7 +443,6 @@ if (@trf_result < 2){
     die "trf seems not to be properly installed:\n";
 }
 
-system("cp -f $data_dir/blosum62.tab ./");
 foreach (@multalin_result){
     chomp $_;
     if ($_ =~ /Error/){
