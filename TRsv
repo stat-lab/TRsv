@@ -96,7 +96,7 @@ elsif (($command eq '--help') or ($command eq '-help') or ($command eq '-h')){
     pod2usage(-verbose => 0);
 }
 elsif (($command eq '--version') or ($command eq '-version') or ($command eq '-v')){
-    die "TRsv v1.1.1\n";
+    die "TRsv v1.1.2\n";
 }
 else{
     die "The first argument of LRsv must be either call, joint_call, or annotate:\n";
