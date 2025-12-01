@@ -495,6 +495,7 @@ system ("rm -f $temp_dir/multalin_test.msf") if (-f "$temp_dir/multalin_test.msf
 @trf_result = `trf $tool_test_dir/test1.fasta 2 7 7 80 10 50 2000 -d -l 1 -h -ngs`;
 system ("cp -f $tool_test_dir/multalin_test.fasta $temp_dir/");
 system ("cp -f $data_dir/blosum62.tab ./");
+system ("cp -f $data_dir/blosum62.tab $temp_dir/");
 my @multalin_result = `multalin -q $temp_dir/multalin_test.fasta`;
 if (@yass_result < 20){
     die "yass seems not to be properly installed:\n";
@@ -638,10 +639,11 @@ print OUT "multalin_path\t$multalin_path\n" if ($multalin_path ne '');
 close (OUT);
 
 my @chr;
+my %chrlen;
 open (FILE, $ref_index) or die "$ref_index is not found:$!\n";
 while (my $line = <FILE>){
     chomp $line;
-    my ($chr) = split (/\t/, $line);
+    my ($chr, $len) = split (/\t/, $line);
     if ($chr_analyzed eq 'ALL'){
         next if ($non_human == 0) and ($chr !~ /^c*h*r*[\dXY]+$/);
     }
@@ -652,6 +654,7 @@ while (my $line = <FILE>){
         next;
     }
     push @chr, $chr;
+    $chrlen{$chr} = $len;
 }
 close (FILE);
 
@@ -2901,6 +2904,11 @@ my $out_vcf = "$out_prefix.discov.vcf";
 my $out_vcf_filt = "$out_prefix.discov.filt.vcf";
 open (OUT, "> $out_vcf");
 open (OUTF, "> $out_vcf_filt") if ($filt_flag == 1);
+print OUT "##fileformat=VCFv4.2\n";
+foreach my $chr2 (@chr){
+    my $chrlen = $chrlen{$chr2};
+    print OUT "##contig=<ID=$chr2,length=$chrlen>\n";
+}
 print OUT "##INFO=<ID=SVTYPE,Number=.,Type=String,Description=\"Type of tandem repeat expansion/contraction (TR-CNV) and structural variation (SV)\">\n";
 print OUT "##INFO=<ID=SVLEN,Number=.,Type=Integer,Description=\"Difference in length between REF and ALT alleles (0 when undefined)\">\n";
 print OUT "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position of the variantdescribed in this record\">\n";
@@ -2952,6 +2960,11 @@ print OUT "##ALT=<ID=TRA:INS:Description=\"Inserted translocation\">\n";
 print OUT "##ALT=<ID=TRA:DEL:Description=\"Deleted translocation\">\n";
 print OUT "##ALT=<ID=REP:Description=\"Replacement\">\n";
 if ($filt_flag == 1){
+    print OUTF "##fileformat=VCFv4.2\n";
+    foreach my $chr2 (@chr){
+        my $chrlen = $chrlen{$chr2};
+        print OUTF "##contig=<ID=$chr2,length=$chrlen>\n";
+    }
     print OUTF "##INFO=<ID=SVTYPE,Number=.,Type=String,Description=\"Type of tandem repeat expansion/contraction (TR-CNV) and structural variation (SV)\">\n";
     print OUTF "##INFO=<ID=SVLEN,Number=.,Type=Integer,Description=\"Difference in length between REF and ALT alleles (0 when undefined)\">\n";
     print OUTF "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position of the variantdescribed in this record\">\n";
