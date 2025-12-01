@@ -67,7 +67,7 @@ The Data folder in the TRsv package contains tandem repeat bed files, gap bed fi
 
 Install the required external tools (samtools, yass, multalin, trf, and Rscript). If the executable names are different from 'trf', 'yass', or 'multalin', please rename the executable names to 'trf', 'yass', or 'multalin' (e.g., trf409.linux64 -> trf). Set the path (the directory path containing the executable) to the $PATH environmental variable (e.g. export PATH=/home/tools/yass-1.15/bin:$PATH). Alternatively, specify the options (samtool_path, yass_path, multalin_path, trf_path, and r_path) on TRsv command or in configure file (e.g., --yass_path /home/tools/yass-1.15/bin).  
 
-Alternatively, a singularity container file (TRsv-v1.1.sif) is available at [http://jenger.riken.jp/static/SVs_bykosugisensei_20220329/TRsv-v1.1.sif]. Run using the singularity TRsv-v1.1.sif file can be done using a run_TRsv_singularity.pl script in the scripts directory.
+Alternatively, a singularity container file (TRsv-v1.1.2.sif) is available at [http://jenger.riken.jp/static/SVs_bykosugisensei_20220329/TRsv-v1.1.2.sif]. Run using the singularity TRsv-v1.1.2.sif file can be done using a run_TRsv_singularity.pl script in the scripts directory.
 
 ## <a name="hdata"></a>Human and Non-human Data 
 
