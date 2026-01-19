@@ -56,7 +56,7 @@ The following 8 columns are needed for each TR region.
 
 ## Citation
 
-Unpublished (submitted).  
+Shunichi Kosugi and Chikashi Terao TRsv: simultaneous detection of tandem repeat variations, structural variations, and short indels using long read sequencing data. Genome Biology 26, 245 (2025). https://link.springer.com/article/10.1186/s13059-025-03718-z   
 
 
 ## Install
